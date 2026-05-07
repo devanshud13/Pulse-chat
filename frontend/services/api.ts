@@ -68,7 +68,10 @@ api.interceptors.response.use(
   async (err: AxiosError) => {
     const original = err.config as AxiosRequestConfig & { _retry?: boolean };
     const status = err.response?.status;
-    if (status === 401 && original && !original._retry) {
+    /* Only attempt refresh if we have a refresh token AND we haven't already retried.
+       Never hard-redirect from here — let route guards handle navigation, otherwise
+       /login itself will infinite-reload when an unauthenticated /users/me 401s. */
+    if (status === 401 && original && !original._retry && tokenStorage.getRefresh()) {
       original._retry = true;
       refreshing = refreshing ?? refreshAccess();
       const newToken = await refreshing;
@@ -78,9 +81,7 @@ api.interceptors.response.use(
         (original.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
         return api.request(original);
       }
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
+      tokenStorage.clear();
     }
     return Promise.reject(err);
   },
