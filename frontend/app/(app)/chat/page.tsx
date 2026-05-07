@@ -20,10 +20,11 @@ export default function ChatPage(): JSX.Element {
 
   const onNotification = useCallback(
     (n: { chatId: string; title: string; body: string }): void => {
-      if (n.chatId === selectedChatId) return;
+      const current = useChatStore.getState().selectedChatId;
+      if (n.chatId === current) return;
       toast(n.title, { description: n.body, duration: 4000 });
     },
-    [selectedChatId],
+    [],
   );
 
   useSocketEvents(onNotification);

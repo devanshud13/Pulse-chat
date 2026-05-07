@@ -39,16 +39,18 @@ export const useChatStore = create<ChatState>((set) => ({
 
   setChats: (chats) =>
     set((state) => {
+      let presenceChanged = false;
       const presence = { ...state.presence };
       for (const c of chats) {
         for (const m of c.members) {
-          presence[m._id] = {
-            status: m.status,
-            lastSeen: m.lastSeen,
-          };
+          const cur = presence[m._id];
+          if (!cur || cur.status !== m.status || cur.lastSeen !== m.lastSeen) {
+            presence[m._id] = { status: m.status, lastSeen: m.lastSeen };
+            presenceChanged = true;
+          }
         }
       }
-      return { chats, presence };
+      return presenceChanged ? { chats, presence } : { chats };
     }),
 
   upsertChat: (chat) =>
@@ -65,6 +67,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => ({ unread: { ...state.unread, [chatId]: (state.unread[chatId] ?? 0) + 1 } })),
   clearUnread: (chatId) =>
     set((state) => {
+      if (!(chatId in state.unread)) return {};
       const next = { ...state.unread };
       delete next[chatId];
       return { unread: next };
@@ -123,16 +126,24 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
 
   setPresence: (userId, status, lastSeen) =>
-    set((state) => ({
-      presence: { ...state.presence, [userId]: { status, lastSeen } },
-    })),
+    set((state) => {
+      const cur = state.presence[userId];
+      if (cur && cur.status === status && cur.lastSeen === lastSeen) return {};
+      return { presence: { ...state.presence, [userId]: { status, lastSeen } } };
+    }),
 
   applyPresenceFromMembers: (members) =>
     set((state) => {
+      let changed = false;
       const next = { ...state.presence };
       for (const m of members) {
-        next[m._id] = { status: m.status, lastSeen: m.lastSeen };
+        const cur = next[m._id];
+        if (!cur || cur.status !== m.status || cur.lastSeen !== m.lastSeen) {
+          next[m._id] = { status: m.status, lastSeen: m.lastSeen };
+          changed = true;
+        }
       }
+      if (!changed) return {};
       return { presence: next };
     }),
 }));
