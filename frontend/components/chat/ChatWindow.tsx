@@ -14,6 +14,7 @@ import { MessageBubble } from './MessageBubble';
 import { MessageComposer } from './MessageComposer';
 import { TypingIndicator } from './TypingIndicator';
 import { formatDate } from '@/utils/format';
+import { EMPTY_MESSAGES, EMPTY_STRING_ARRAY } from '@/constants/empty';
 
 interface Props {
   chat: Chat;
@@ -21,11 +22,13 @@ interface Props {
 
 export function ChatWindow({ chat }: Props): JSX.Element {
   const user = useAuthStore((s) => s.user);
-  const messages = useChatStore((s) => s.messagesByChat[chat._id] ?? []);
+  const rawMessages = useChatStore((s) => s.messagesByChat[chat._id]);
+  const messages = rawMessages === undefined ? EMPTY_MESSAGES : rawMessages;
   const setMessages = useChatStore((s) => s.setMessages);
   const prependMessages = useChatStore((s) => s.prependMessages);
   const clearUnread = useChatStore((s) => s.clearUnread);
-  const typingIds = useChatStore((s) => s.typingByChat[chat._id] ?? []);
+  const rawTyping = useChatStore((s) => s.typingByChat[chat._id]);
+  const typingIds = rawTyping === undefined ? EMPTY_STRING_ARRAY : rawTyping;
   const applyPresenceFromMembers = useChatStore((s) => s.applyPresenceFromMembers);
 
   const [loading, setLoading] = useState(false);

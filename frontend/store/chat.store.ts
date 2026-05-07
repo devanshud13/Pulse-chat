@@ -107,22 +107,32 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => {
       const list = state.messagesByChat[chatId];
       if (!list) return {};
+      let changed = false;
+      const next = list.map((m) => {
+        if (m.readBy.includes(userId)) return m;
+        changed = true;
+        return { ...m, readBy: [...m.readBy, userId] };
+      });
+      if (!changed) return {};
       return {
         messagesByChat: {
           ...state.messagesByChat,
-          [chatId]: list.map((m) =>
-            m.readBy.includes(userId) ? m : { ...m, readBy: [...m.readBy, userId] },
-          ),
+          [chatId]: next,
         },
       };
     }),
 
   setTyping: (chatId, userId, typing) =>
     set((state) => {
-      const current = new Set(state.typingByChat[chatId] ?? []);
-      if (typing) current.add(userId);
-      else current.delete(userId);
-      return { typingByChat: { ...state.typingByChat, [chatId]: [...current] } };
+      const prev = state.typingByChat[chatId] ?? [];
+      const nextSet = new Set(prev);
+      if (typing) nextSet.add(userId);
+      else nextSet.delete(userId);
+      const next = [...nextSet];
+      if (next.length === prev.length && next.every((id, i) => id === prev[i])) {
+        return {};
+      }
+      return { typingByChat: { ...state.typingByChat, [chatId]: next } };
     }),
 
   setPresence: (userId, status, lastSeen) =>
@@ -147,3 +157,15 @@ export const useChatStore = create<ChatState>((set) => ({
       return { presence: next };
     }),
 }));
+
+/** Clears chat UI state — call on logout / auth failure / new login so stale chats don’t leak across sessions. */
+export function resetChatState(): void {
+  useChatStore.setState({
+    chats: [],
+    unread: {},
+    selectedChatId: null,
+    messagesByChat: {},
+    typingByChat: {},
+    presence: {},
+  });
+}

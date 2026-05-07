@@ -92,8 +92,11 @@ export function Sidebar({ selectedId, onSelect }: Props): JSX.Element {
   useEffect(() => {
     let active = true;
     if (!search.trim()) {
-      setUserResults([]);
-      return;
+      setUserResults((prev) => (prev.length === 0 ? prev : []));
+      setSearchingUsers(false);
+      return () => {
+        active = false;
+      };
     }
     setSearchingUsers(true);
     const t = setTimeout(async () => {

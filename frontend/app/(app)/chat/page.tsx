@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { MessageCircle } from 'lucide-react';
@@ -29,10 +29,15 @@ export default function ChatPage(): JSX.Element {
 
   useSocketEvents(onNotification);
 
+  const autoSelectDone = useRef(false);
   useEffect(() => {
-    if (!selectedChatId && chats.length > 0) {
-      selectChat(chats[0]._id);
+    if (selectedChatId) {
+      autoSelectDone.current = true;
+      return;
     }
+    if (chats.length === 0 || autoSelectDone.current) return;
+    autoSelectDone.current = true;
+    selectChat(chats[0]._id);
   }, [selectedChatId, chats, selectChat]);
 
   const selected = useMemo(

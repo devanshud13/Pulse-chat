@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { chatService } from '@/services/chat.service';
 import { useChatStore } from '@/store/chat.store';
+import { EMPTY_MESSAGES } from '@/constants/empty';
 import { formatBytes, formatRelative } from '@/utils/format';
 
 interface Props {
@@ -20,7 +21,8 @@ interface Props {
 
 export function ChatInfoPanel({ chat, currentUserId }: Props): JSX.Element {
   const upsertChat = useChatStore((s) => s.upsertChat);
-  const messages = useChatStore((s) => s.messagesByChat[chat._id] ?? []);
+  const rawMessages = useChatStore((s) => s.messagesByChat[chat._id]);
+  const messages = rawMessages === undefined ? EMPTY_MESSAGES : rawMessages;
   const selectChat = useChatStore((s) => s.selectChat);
 
   const [search, setSearch] = useState('');

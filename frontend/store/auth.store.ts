@@ -3,6 +3,7 @@ import type { User } from '@/types';
 import { authService } from '@/services/auth.service';
 import { tokenStorage } from '@/services/api';
 import { disconnectSocket } from '@/services/socket';
+import { resetChatState } from '@/store/chat.store';
 
 interface AuthState {
   user: User | null;
@@ -34,6 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const user = await authService.me();
       set({ user });
     } catch {
+      resetChatState();
       set({ user: null });
       tokenStorage.clear();
     } finally {
@@ -45,6 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true });
     try {
       const res = await authService.login({ email, password });
+      resetChatState();
       set({ user: res.user });
     } finally {
       set({ loading: false });
@@ -55,6 +58,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true });
     try {
       const res = await authService.signup({ name, email, password });
+      resetChatState();
       set({ user: res.user });
     } finally {
       set({ loading: false });
@@ -66,6 +70,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await authService.logout();
     } finally {
       disconnectSocket();
+      resetChatState();
       set({ user: null });
     }
   },
