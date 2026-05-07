@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo">
+        <div class="logo-mark"></div>
+        <span>Pulse</span>
+      </div>
+      <span id="conn" class="dot" title="Connection"></span>
+    </header>
+
+    <main id="loading" class="state">
+      <div class="spinner"></div>
+      <p>Loading…</p>
+    </main>
+
+    <main id="logged-out" class="state hidden">
+      <h2>You're signed out</h2>
+      <p class="muted">Sign in on the website to start receiving notifications.</p>
+      <button id="open-login" class="primary">Open Pulse Chat</button>
+    </main>
+
+    <main id="logged-in" class="state hidden">
+      <div class="user">
+        <div class="avatar" id="avatar"></div>
+        <div class="user-meta">
+          <strong id="user-name">—</strong>
+          <span id="user-email" class="muted small">—</span>
+        </div>
+      </div>
+
+      <div class="stat">
+        <span>Unread messages</span>
+        <strong id="unread-count">0</strong>
+      </div>
+
+      <button id="open-chat" class="primary">Open Pulse Chat</button>
+      <button id="logout" class="ghost">Sign out</button>
+    </main>
+
+    <footer>
+      <details>
+        <summary>Endpoints</summary>
+        <label
+          >API URL
+          <input id="cfg-api" type="url" placeholder="http://localhost:5000/api/v1" />
+        </label>
+        <label
+          >Socket URL
+          <input id="cfg-socket" type="url" placeholder="http://localhost:5000" />
+        </label>
+        <label
+          >Frontend URL
+          <input id="cfg-frontend" type="url" placeholder="http://localhost:3000" />
+        </label>
+        <button id="save-config" class="ghost">Save endpoints</button>
+      </details>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

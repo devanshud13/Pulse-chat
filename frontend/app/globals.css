@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 250 84% 60%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 250 84% 60%;
+    --radius: 0.75rem;
+  }
+  .dark {
+    --background: 240 10% 4%;
+    --foreground: 210 40% 98%;
+    --card: 240 10% 6%;
+    --card-foreground: 210 40% 98%;
+    --popover: 240 10% 6%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 263 90% 70%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 240 5% 12%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 240 5% 14%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 240 5% 16%;
+    --input: 240 5% 14%;
+    --ring: 263 90% 70%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html, body { @apply h-full; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply backdrop-blur-xl bg-background/60 border border-border/40;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent;
+  }
+  .gradient-bg {
+    background: radial-gradient(circle at 20% 20%, hsl(var(--primary) / 0.15), transparent 50%),
+      radial-gradient(circle at 80% 0%, rgba(34, 211, 238, 0.10), transparent 50%),
+      radial-gradient(circle at 50% 100%, rgba(217, 70, 239, 0.10), transparent 50%);
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+}
