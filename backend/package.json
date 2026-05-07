@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
-    "build": "node ./node_modules/typescript/bin/tsc -p tsconfig.json",
+    "build": "node ./node_modules/typescript/lib/tsc.js -p tsconfig.json",
     "start": "node dist/app.js",
     "lint": "eslint \"src/**/*.ts\"",
-    "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit"
+    "typecheck": "node ./node_modules/typescript/lib/tsc.js --noEmit"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
