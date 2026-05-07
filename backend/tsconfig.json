@@ -19,10 +19,7 @@
     "sourceMap": true,
     "declaration": false,
     "removeComments": true,
-    "baseUrl": "./src",
-    "paths": {
-      "@/*": ["*"]
-    }
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
