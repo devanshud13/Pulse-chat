@@ -2,7 +2,7 @@ services:
   - type: web
     name: pulse-chat-backend
     runtime: node
-    plan: starter
+    plan: free
     region: oregon
     rootDir: backend
     buildCommand: npm install --legacy-peer-deps && npm run build
