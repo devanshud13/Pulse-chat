@@ -5,10 +5,14 @@ services:
     plan: free
     region: oregon
     rootDir: backend
-    buildCommand: npm install --legacy-peer-deps && npm run build
+    # `--include=dev` is required because NODE_ENV=production tells npm to skip devDependencies,
+    # but we need TypeScript (a devDependency) to compile during build.
+    buildCommand: npm install --include=dev --legacy-peer-deps && npm run build
     startCommand: npm start
     healthCheckPath: /api/v1/health
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.1
       - key: NODE_ENV
         value: production
       - key: PORT
