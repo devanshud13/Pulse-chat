@@ -14,80 +14,55 @@ interface NotificationPayload {
 }
 
 /**
- * Wires the singleton Socket.IO client to the chat store.
- *
- * Critical: this hook MUST NOT disconnect/reconnect on every render or
- * dependency change — that creates a flood of "WebSocket is closed before
- * the connection is established" errors and triggers React #185 (max
- * update depth) by oscillating store state.
- *
- * Strategy:
- *  1. One effect dedicated to connection lifecycle (depends only on user._id).
- *  2. One effect dedicated to attaching listeners (zustand actions are
- *     stable, so this only re-runs when the user changes).
- *  3. Latest `selectedChatId` and `onNotification` are read through refs
- *     inside the listeners — the listeners themselves never need to be
- *     re-bound.
+ * Single source of truth for socket subscriptions. Only depends on the
+ * authenticated user id — listeners read all other live state from the
+ * stores via `getState()` so the effect never needs to re-run when chats
+ * or selection change. This removes any chance of re-render storms or
+ * WebSocket reconnect thrash that produces React #185.
  */
 export const useSocketEvents = (
   onNotification?: (n: NotificationPayload) => void,
 ): void => {
-  const user = useAuthStore((s) => s.user);
-  const appendMessage = useChatStore((s) => s.appendMessage);
-  const bumpUnread = useChatStore((s) => s.bumpUnread);
-  const setTyping = useChatStore((s) => s.setTyping);
-  const setPresence = useChatStore((s) => s.setPresence);
-  const markChatRead = useChatStore((s) => s.markChatRead);
+  const userId = useAuthStore((s) => s.user?._id ?? null);
 
-  const userIdRef = useRef<string | null>(null);
-  userIdRef.current = user?._id ?? null;
+  const notifRef = useRef(onNotification);
+  useEffect(() => {
+    notifRef.current = onNotification;
+  }, [onNotification]);
 
-  const selectedChatIdRef = useRef<string | null>(null);
-  selectedChatIdRef.current = useChatStore((s) => s.selectedChatId);
-
-  const onNotificationRef = useRef(onNotification);
-  onNotificationRef.current = onNotification;
-
-  const userId = user?._id;
   useEffect(() => {
     if (!userId) return;
-    getSocket();
-    reconnectWithFreshToken();
-    /* Intentionally do NOT disconnect on unmount: chat page re-mounts
-       frequently during route transitions. The socket service is a
-       singleton and is torn down explicitly only on logout. */
-  }, [userId]);
-
-  useEffect(() => {
-    if (!user) return;
     const socket = getSocket();
+    reconnectWithFreshToken();
 
     const onMessage = (msg: Message): void => {
-      appendMessage(msg.chat, msg);
+      const me = useAuthStore.getState().user?._id;
+      const selectedChatId = useChatStore.getState().selectedChatId;
+      useChatStore.getState().appendMessage(msg.chat, msg);
       const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender._id;
-      const me = userIdRef.current;
-      if (me && senderId !== me && msg.chat !== selectedChatIdRef.current) {
-        bumpUnread(msg.chat);
+      if (me && senderId !== me && msg.chat !== selectedChatId) {
+        useChatStore.getState().bumpUnread(msg.chat);
       }
     };
     const onTypingStart = (p: { chatId: string; userId: string }): void => {
-      if (p.userId !== userIdRef.current) setTyping(p.chatId, p.userId, true);
+      const me = useAuthStore.getState().user?._id;
+      if (p.userId !== me) useChatStore.getState().setTyping(p.chatId, p.userId, true);
     };
     const onTypingStop = (p: { chatId: string; userId: string }): void => {
-      setTyping(p.chatId, p.userId, false);
+      useChatStore.getState().setTyping(p.chatId, p.userId, false);
     };
     const onPresence = (p: {
       userId: string;
       status: 'online' | 'offline';
       lastSeen?: string;
     }): void => {
-      setPresence(p.userId, p.status, p.lastSeen);
+      useChatStore.getState().setPresence(p.userId, p.status, p.lastSeen);
     };
     const onRead = (p: { chatId: string; userId: string }): void => {
-      markChatRead(p.chatId, p.userId);
+      useChatStore.getState().markChatRead(p.chatId, p.userId);
     };
     const onNotify = (p: NotificationPayload): void => {
-      onNotificationRef.current?.(p);
+      notifRef.current?.(p);
     };
 
     socket.on('message:new', onMessage);
@@ -105,5 +80,5 @@ export const useSocketEvents = (
       socket.off('message:read', onRead);
       socket.off('notification:new', onNotify);
     };
-  }, [user, appendMessage, bumpUnread, setTyping, setPresence, markChatRead]);
+  }, [userId]);
 };

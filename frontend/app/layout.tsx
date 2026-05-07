@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { AuthProvider } from '@/providers/auth-provider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
@@ -22,10 +23,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans antialiased">
         <ThemeProvider>
-          <AuthProvider>
-            <div className="relative flex min-h-screen flex-col">{children}</div>
-            <Toaster richColors position="top-right" theme="system" closeButton />
-          </AuthProvider>
+          <ErrorBoundary>
+            <AuthProvider>
+              <div className="relative flex min-h-screen flex-col">{children}</div>
+              <Toaster richColors position="top-right" theme="system" closeButton />
+            </AuthProvider>
+          </ErrorBoundary>
         </ThemeProvider>
       </body>
     </html>
