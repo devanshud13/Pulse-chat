@@ -10,6 +10,7 @@ import { ChatWindow } from '@/components/chat/ChatWindow';
 import { useChatStore } from '@/store/chat.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useSocketEvents } from '@/hooks/useSocketEvents';
+import { primeNotificationSound } from '@/lib/sound';
 import { cn } from '@/utils/cn';
 
 export default function ChatPage(): JSX.Element {
@@ -29,6 +30,23 @@ export default function ChatPage(): JSX.Element {
   );
 
   useSocketEvents(onNotification);
+
+  /* "Unlock" the notification chime on the user's first interaction so that
+     subsequent plays still work after the tab goes into the background. We
+     wire it once per mount and let `primeNotificationSound` short-circuit if
+     it's already been primed. */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onGesture = (): void => {
+      primeNotificationSound();
+    };
+    window.addEventListener('pointerdown', onGesture, { once: true });
+    window.addEventListener('keydown', onGesture, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', onGesture);
+      window.removeEventListener('keydown', onGesture);
+    };
+  }, []);
 
   /* On mobile, we want to start with the chat list visible (no chat opened by
      default). On desktop we still auto-pick the first chat for a faster start. */

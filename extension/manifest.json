@@ -4,7 +4,7 @@
   "short_name": "Pulse",
   "version": "1.0.0",
   "description": "Realtime notifications, unread badge and quick access to your Pulse Chat conversations.",
-  "permissions": ["storage", "notifications", "alarms", "offscreen"],
+  "permissions": ["storage", "notifications", "alarms", "offscreen", "tabs"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "action": {
     "default_title": "Pulse Chat",

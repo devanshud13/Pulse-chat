@@ -17,13 +17,35 @@ async function hasOffscreen() {
 async function ensureOffscreen() {
   try {
     if (await hasOffscreen()) return;
+    /* AUDIO_PLAYBACK lets the offscreen page play the notification chime when
+       the user has no Pulse tab open; the other reasons keep the persistent
+       Socket.IO connection alive on Chrome's idle worker cycle. */
     await chrome.offscreen.createDocument({
       url: 'offscreen.html',
-      reasons: ['BLOBS', 'WORKERS'],
-      justification: 'Maintain a persistent Socket.IO connection for realtime chat notifications.',
+      reasons: ['BLOBS', 'WORKERS', 'AUDIO_PLAYBACK'],
+      justification:
+        'Maintain a persistent Socket.IO connection and play notification sound for incoming chat messages.',
     });
   } catch (err) {
     console.warn('[pulse] offscreen create failed', err);
+  }
+}
+
+/**
+ * True when at least one tab on the configured frontend origin is open. We use
+ * this to suppress the extension's own chime when the website is already
+ * playing it in-tab — otherwise the user would hear the sound twice.
+ */
+async function isWebsiteTabOpen() {
+  try {
+    const { frontendUrl } = await getConfig();
+    if (!frontendUrl) return false;
+    const url = new URL(frontendUrl);
+    const tabs = await chrome.tabs.query({ url: `${url.origin}/*` });
+    return Array.isArray(tabs) && tabs.length > 0;
+  } catch (err) {
+    console.warn('[pulse] tab query failed', err);
+    return false;
   }
 }
 
@@ -63,6 +85,12 @@ async function showNotification(payload) {
   if (payload.chatId) {
     await chrome.storage.session?.set?.({ [id]: payload.chatId }).catch(() => undefined);
     await chrome.storage.local.set({ [`notif:${id}`]: payload.chatId });
+  }
+  /* Only play the chime when there is no open Pulse tab — the website plays
+     its own sound when one of its tabs is loaded, even in the background. */
+  if (!(await isWebsiteTabOpen())) {
+    await ensureOffscreen();
+    await notifyOffscreen('PLAY_SOUND', {});
   }
 }
 

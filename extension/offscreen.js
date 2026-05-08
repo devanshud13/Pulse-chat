@@ -2,10 +2,31 @@
  * Persistent Socket.IO connection lives in this offscreen document so it
  * survives the service worker's idle termination cycle. The page receives
  * commands from background.js via chrome.runtime.onMessage.
+ *
+ * Audio playback also runs here (offscreen reason AUDIO_PLAYBACK), used to
+ * play the notification chime when no Pulse website tab is open.
  */
 
 let socket = null;
 let currentToken = '';
+let chime = null;
+
+function playChime() {
+  try {
+    if (!chime) {
+      chime = new Audio(chrome.runtime.getURL('sounds/notification.mp3'));
+      chime.preload = 'auto';
+      chime.volume = 0.8;
+    }
+    chime.currentTime = 0;
+    const p = chime.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch((err) => console.warn('[pulse-offscreen] audio play failed', err));
+    }
+  } catch (err) {
+    console.warn('[pulse-offscreen] audio init failed', err);
+  }
+}
 
 function getSocketUrl() {
   return new Promise((resolve) => {
@@ -97,6 +118,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (socket && !socket.connected && currentToken) {
           await connect(currentToken);
         }
+        sendResponse({ ok: true });
+        break;
+      case 'PLAY_SOUND':
+        playChime();
         sendResponse({ ok: true });
         break;
       default:

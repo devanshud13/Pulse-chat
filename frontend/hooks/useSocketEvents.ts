@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { getSocket, reconnectWithFreshToken } from '@/services/socket';
 import { useChatStore } from '@/store/chat.store';
 import { useAuthStore } from '@/store/auth.store';
+import { playNotificationSound } from '@/lib/sound';
 import type { Message } from '@/types';
 
 interface NotificationPayload {
@@ -56,6 +57,20 @@ export const useSocketEvents = (
       useChatStore.getState().appendMessage(msg.chat, msg);
       if (me && senderId !== me && msg.chat !== selectedChatId) {
         useChatStore.getState().bumpUnread(msg.chat);
+      }
+
+      /* Audible alert for incoming messages from someone else when the user
+         either isn't looking at this browser tab, or is reading a different
+         chat. We deliberately key off the same conditions used for toasts so
+         a single source-of-truth governs "did the user see this yet?". */
+      if (me && senderId !== me) {
+        const tabHidden =
+          typeof document !== 'undefined' &&
+          (document.visibilityState !== 'visible' || !document.hasFocus());
+        const otherChat = msg.chat !== selectedChatId;
+        if (tabHidden || otherChat) {
+          playNotificationSound();
+        }
       }
     };
     const onTypingStart = (p: { chatId: string; userId: string }): void => {
