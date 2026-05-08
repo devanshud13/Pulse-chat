@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { sendMessageSchema } from '../validators/chat';
+import { editMessageSchema, sendMessageSchema } from '../validators/chat';
 import {
+  clearChat,
   deleteForEveryone,
   deleteForMe,
+  editMessage,
   listMessages,
   markRead,
   sendMessage,
@@ -19,6 +21,8 @@ router.post('/', validate(sendMessageSchema), sendMessage);
 router.get('/unread/total', totalUnread);
 router.get('/:chatId', listMessages);
 router.post('/:chatId/read', markRead);
+router.delete('/:chatId/clear', clearChat);
+router.patch('/:id', validate(editMessageSchema), editMessage);
 router.delete('/:id/me', deleteForMe);
 router.delete('/:id/everyone', deleteForEveryone);
 /** Legacy: maps to delete-for-everyone for backward compatibility. */

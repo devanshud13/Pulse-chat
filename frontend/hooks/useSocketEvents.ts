@@ -78,12 +78,32 @@ export const useSocketEvents = (
     const onDelete = (p: { _id: string; chat: string }): void => {
       useChatStore.getState().markMessageDeleted(p.chat, p._id);
     };
+    const onEdit = (msg: Message): void => {
+      const me = useAuthStore.getState().user?._id;
+      const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender._id;
+      /* The sender already updated locally via the PATCH response; no need to
+         clobber their cached `plaintext` with the encrypted ciphertext. */
+      if (senderId === me) {
+        useChatStore.getState().updateMessage(msg.chat, msg._id, {
+          edited: true,
+          updatedAt: msg.updatedAt,
+        });
+        return;
+      }
+      /* Receivers need to drop the cached plaintext so `useDecryptedMessages`
+         picks the new ciphertext up on the next pass. */
+      useChatStore.getState().updateMessage(msg.chat, msg._id, {
+        ...msg,
+        plaintext: undefined,
+      });
+    };
     const onNotify = (p: NotificationPayload): void => {
       notifRef.current?.(p);
     };
 
     socket.on('message:new', onMessage);
     socket.on('message:delete', onDelete);
+    socket.on('message:edit', onEdit);
     socket.on('typing:start', onTypingStart);
     socket.on('typing:stop', onTypingStop);
     socket.on('presence:update', onPresence);
@@ -93,6 +113,7 @@ export const useSocketEvents = (
     return () => {
       socket.off('message:new', onMessage);
       socket.off('message:delete', onDelete);
+      socket.off('message:edit', onEdit);
       socket.off('typing:start', onTypingStart);
       socket.off('typing:stop', onTypingStop);
       socket.off('presence:update', onPresence);

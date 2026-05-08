@@ -51,6 +51,24 @@ export const sendMessageSchema = z.object({
     .optional(),
 });
 
+export const editMessageSchema = z.object({
+  content: z.string().min(1).max(20000),
+  encryption: z
+    .object({
+      enabled: z.boolean(),
+      iv: z.string().optional(),
+      keys: z
+        .array(
+          z.object({
+            user: objectId,
+            key: z.string(),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+});
+
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(30),

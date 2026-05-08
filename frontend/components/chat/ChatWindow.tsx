@@ -16,6 +16,7 @@ import { TypingIndicator } from './TypingIndicator';
 import { formatDate } from '@/utils/format';
 import { EMPTY_MESSAGES, EMPTY_STRING_ARRAY } from '@/constants/empty';
 import { useDecryptedMessages } from '@/hooks/useDecryptedMessages';
+import { cn } from '@/utils/cn';
 
 interface Props {
   chat: Chat;
@@ -148,7 +149,12 @@ export function ChatWindow({ chat, onBack }: Props): JSX.Element {
 
   return (
     <div className="flex h-full min-w-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 flex-col',
+          showInfo && 'hidden lg:flex',
+        )}
+      >
         <ChatHeader
           chat={chat}
           currentUserId={user?._id ?? ''}
@@ -212,7 +218,13 @@ export function ChatWindow({ chat, onBack }: Props): JSX.Element {
         <TypingIndicator names={typingNames} />
         <MessageComposer chat={chat} />
       </div>
-      {showInfo && <ChatInfoPanel chat={chat} currentUserId={user?._id ?? ''} />}
+      {showInfo && (
+        <ChatInfoPanel
+          chat={chat}
+          currentUserId={user?._id ?? ''}
+          onClose={() => setShowInfo(false)}
+        />
+      )}
     </div>
   );
 }

@@ -36,6 +36,7 @@ export interface IMessage extends Document {
   readBy: Types.ObjectId[];
   deliveredTo: Types.ObjectId[];
   edited: boolean;
+  editedAt?: Date;
   /** True when the message was deleted for everyone (tombstone). */
   deleted: boolean;
   /** User ids that hid this message for themselves only. */
@@ -83,6 +84,7 @@ const messageSchema = new Schema<IMessage>(
     readBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     deliveredTo: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     edited: { type: Boolean, default: false },
+    editedAt: { type: Date },
     deleted: { type: Boolean, default: false },
     deletedFor: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     encryption: { type: encryptionSchema, default: () => ({ enabled: false, keys: [] }) },

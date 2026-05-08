@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import type { Chat, Message, User } from '@/types';
 
+interface EditingState {
+  chatId: string;
+  messageId: string;
+  /** Original plaintext shown in the composer; the user edits this in place. */
+  plaintext: string;
+}
+
 interface ChatState {
   chats: Chat[];
   unread: Record<string, number>;
@@ -8,6 +15,7 @@ interface ChatState {
   messagesByChat: Record<string, Message[]>;
   typingByChat: Record<string, string[]>;
   presence: Record<string, { status: 'online' | 'offline'; lastSeen?: string }>;
+  editing: EditingState | null;
 
   setChats: (chats: Chat[]) => void;
   upsertChat: (chat: Chat) => void;
@@ -24,15 +32,27 @@ interface ChatState {
   replaceMessage: (chatId: string, tempId: string, real: Message) => void;
   /** Updates flags on a pending optimistic message (e.g. mark `failed: true`). */
   updateMessage: (chatId: string, messageId: string, patch: Partial<Message>) => void;
+  /** Restores a previously-removed/tombstoned message at its original position
+   *  (used to roll back a failed optimistic delete). */
+  restoreMessage: (chatId: string, message: Message, atIndex: number) => void;
   removeMessage: (chatId: string, messageId: string) => void;
   /** Marks a message tombstoned across all chat panes (used by `message:delete`). */
   markMessageDeleted: (chatId: string, messageId: string) => void;
+  /** Wipes every message in a chat from the local store (used by clearChat). */
+  clearChatMessages: (chatId: string) => void;
   markChatRead: (chatId: string, userId: string) => void;
 
   setTyping: (chatId: string, userId: string, typing: boolean) => void;
 
   setPresence: (userId: string, status: 'online' | 'offline', lastSeen?: string) => void;
   applyPresenceFromMembers: (members: User[]) => void;
+
+  startEditing: (chatId: string, messageId: string, plaintext: string) => void;
+  cancelEditing: () => void;
+
+  /** Caches a decrypted preview for a chat's lastMessage so the sidebar can
+   *  show the actual text instead of the "🔒 Encrypted message" placeholder. */
+  setLastMessagePlaintext: (chatId: string, messageId: string, plaintext: string) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -42,6 +62,7 @@ export const useChatStore = create<ChatState>((set) => ({
   messagesByChat: {},
   typingByChat: {},
   presence: {},
+  editing: null,
 
   setChats: (chats) =>
     set((state) => {
@@ -154,6 +175,26 @@ export const useChatStore = create<ChatState>((set) => ({
         [chatId]: (state.messagesByChat[chatId] ?? []).filter((m) => m._id !== messageId),
       },
     })),
+  restoreMessage: (chatId, message, atIndex) =>
+    set((state) => {
+      const list = state.messagesByChat[chatId] ?? [];
+      if (list.some((m) => m._id === message._id)) return {};
+      const idx = Math.min(Math.max(atIndex, 0), list.length);
+      const next = [...list.slice(0, idx), message, ...list.slice(idx)];
+      return { messagesByChat: { ...state.messagesByChat, [chatId]: next } };
+    }),
+  clearChatMessages: (chatId) =>
+    set((state) => {
+      if (!state.messagesByChat[chatId] && !state.chats.some((c) => c._id === chatId)) {
+        return {};
+      }
+      const messagesByChat = { ...state.messagesByChat };
+      delete messagesByChat[chatId];
+      const chats = state.chats.map((c) =>
+        c._id === chatId ? { ...c, lastMessage: undefined } : c,
+      );
+      return { messagesByChat, chats };
+    }),
   markMessageDeleted: (chatId, messageId) =>
     set((state) => {
       const list = state.messagesByChat[chatId];
@@ -231,6 +272,25 @@ export const useChatStore = create<ChatState>((set) => ({
       if (!changed) return {};
       return { presence: next };
     }),
+
+  startEditing: (chatId, messageId, plaintext) =>
+    set({ editing: { chatId, messageId, plaintext } }),
+  cancelEditing: () => set({ editing: null }),
+
+  setLastMessagePlaintext: (chatId, messageId, plaintext) =>
+    set((state) => {
+      let touched = false;
+      const chats = state.chats.map((c) => {
+        if (c._id !== chatId) return c;
+        const lm = c.lastMessage;
+        if (!lm || lm._id !== messageId) return c;
+        if (lm.plaintext === plaintext) return c;
+        touched = true;
+        return { ...c, lastMessage: { ...lm, plaintext } };
+      });
+      if (!touched) return {};
+      return { chats };
+    }),
 }));
 
 /** Clears chat UI state — call on logout / auth failure / new login so stale chats don’t leak across sessions. */
@@ -242,5 +302,6 @@ export function resetChatState(): void {
     messagesByChat: {},
     typingByChat: {},
     presence: {},
+    editing: null,
   });
 }

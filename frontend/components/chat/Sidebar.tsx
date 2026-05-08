@@ -38,6 +38,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useChatStore } from '@/store/chat.store';
 import { chatService } from '@/services/chat.service';
 import { useMounted } from '@/hooks/useMounted';
+import { useDecryptedChatPreviews } from '@/hooks/useDecryptedChatPreviews';
 import { initials } from '@/utils/format';
 
 interface Props {
@@ -83,6 +84,10 @@ export function Sidebar({ selectedId, onSelect }: Props): JSX.Element {
       mounted = false;
     };
   }, [setChats, setUnread]);
+
+  /* Decrypt every chat's last-message preview so the sidebar shows the real
+     text instead of "🔒 Encrypted message" once keys are unlocked. */
+  useDecryptedChatPreviews(chats, user?._id ?? null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();

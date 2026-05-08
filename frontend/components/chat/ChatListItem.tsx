@@ -22,15 +22,21 @@ export function ChatListItem({ chat, currentUserId, active, unread, onClick }: P
 
   const title = chat.isGroup ? chat.name ?? 'Group' : counterpart?.name ?? 'Direct';
   const last = chat.lastMessage;
-  const subtitle = last?.deleted
-    ? 'Message deleted'
-    : last?.type === 'image'
-      ? '📷 Photo'
-      : last?.type === 'file'
-        ? '📎 File'
-        : last?.encryption?.enabled
-          ? last.plaintext ?? '🔒 Encrypted message'
-          : last?.content || 'Say hi 👋';
+  /* Encrypted previews live behind the user's private key. While we're still
+   * unwrapping it (see `useDecryptedChatPreviews`) we show an empty subtitle
+   * rather than a "🔒 Encrypted message" placeholder — the real text fills in
+   * a tick later once decryption resolves. */
+  const subtitle = !last
+    ? 'Say hi 👋'
+    : last.deleted
+      ? 'Message deleted'
+      : last.type === 'image'
+        ? '📷 Photo'
+        : last.type === 'file'
+          ? '📎 File'
+          : last.encryption?.enabled
+            ? last.plaintext ?? ''
+            : last.content || 'Say hi 👋';
 
   return (
     <motion.button

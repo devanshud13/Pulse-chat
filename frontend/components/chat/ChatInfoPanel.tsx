@@ -2,14 +2,22 @@
 
 import { useMemo, useState } from 'react';
 import axios from 'axios';
-import { LogOut, UserMinus, UserPlus } from 'lucide-react';
+import { LogOut, Trash2, UserMinus, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Chat, User } from '@/types';
 import { UserAvatar } from './UserAvatar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { chatService } from '@/services/chat.service';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { chatService, messageService } from '@/services/chat.service';
 import { useChatStore } from '@/store/chat.store';
 import { EMPTY_MESSAGES } from '@/constants/empty';
 import { formatBytes, formatRelative } from '@/utils/format';
@@ -17,17 +25,23 @@ import { formatBytes, formatRelative } from '@/utils/format';
 interface Props {
   chat: Chat;
   currentUserId: string;
+  /** Mobile/tablet only: shown as a close button to dismiss the panel. */
+  onClose?: () => void;
 }
 
-export function ChatInfoPanel({ chat, currentUserId }: Props): JSX.Element {
+export function ChatInfoPanel({ chat, currentUserId, onClose }: Props): JSX.Element {
   const upsertChat = useChatStore((s) => s.upsertChat);
   const rawMessages = useChatStore((s) => s.messagesByChat[chat._id]);
   const messages = rawMessages === undefined ? EMPTY_MESSAGES : rawMessages;
   const selectChat = useChatStore((s) => s.selectChat);
+  const clearChatMessages = useChatStore((s) => s.clearChatMessages);
 
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [searching, setSearching] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearWithMedia, setClearWithMedia] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const isAdmin = useMemo(
     () => chat.admins.some((a) => a._id === currentUserId),
@@ -87,6 +101,32 @@ export function ChatInfoPanel({ chat, currentUserId }: Props): JSX.Element {
     }
   };
 
+  /* Clears the chat for the current user only — counterpart's view stays
+     intact. If "include media" is checked we also destroy the user's own
+     uploaded Cloudinary assets to free their cloud storage. */
+  const onConfirmClear = async (): Promise<void> => {
+    if (clearing) return;
+    setClearing(true);
+    try {
+      const result = await messageService.clearChat(chat._id, clearWithMedia);
+      clearChatMessages(chat._id);
+      setClearOpen(false);
+      setClearWithMedia(false);
+      toast.success(
+        clearWithMedia
+          ? `Cleared ${result.cleared} messages • ${result.mediaDeleted} media removed`
+          : `Cleared ${result.cleared} messages`,
+      );
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err)
+        ? (err.response?.data as { message?: string } | undefined)?.message ?? 'Failed to clear'
+        : 'Failed to clear';
+      toast.error(msg);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const leave = async (): Promise<void> => {
     try {
       await chatService.leaveGroup(chat._id);
@@ -98,7 +138,14 @@ export function ChatInfoPanel({ chat, currentUserId }: Props): JSX.Element {
   };
 
   return (
-    <aside className="hidden h-full w-80 shrink-0 flex-col border-l bg-card/30 lg:flex">
+    <aside className="flex h-full w-full shrink-0 flex-col border-l bg-card/30 lg:w-80">
+      {onClose && (
+        <div className="flex items-center justify-end border-b px-2 py-2 lg:hidden">
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close details">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
       <div className="flex flex-col items-center gap-3 p-6 text-center">
         <UserAvatar
           userId={counterpart?._id}
@@ -155,6 +202,17 @@ export function ChatInfoPanel({ chat, currentUserId }: Props): JSX.Element {
               )}
             </div>
           )}
+        </div>
+
+        <Separator />
+        <div className="p-4">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setClearOpen(true)}
+          >
+            <Trash2 className="h-4 w-4" /> Clear all chat
+          </Button>
         </div>
 
         {chat.isGroup && (
@@ -249,6 +307,54 @@ export function ChatInfoPanel({ chat, currentUserId }: Props): JSX.Element {
           Created {formatRelative(chat.createdAt)} • {formatBytes(0)} cached
         </div>
       </div>
+
+      <Dialog
+        open={clearOpen}
+        onOpenChange={(o) => {
+          setClearOpen(o);
+          if (!o) setClearWithMedia(false);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you sure to delete this chat?</DialogTitle>
+            <DialogDescription>
+              All messages in this chat will be removed from your view. The other person’s copy
+              is not affected.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={clearWithMedia}
+              onChange={(e) => setClearWithMedia(e.target.checked)}
+            />
+            <span>Delete all chat including media</span>
+          </label>
+          {clearWithMedia && (
+            <p className="text-[11px] text-muted-foreground">
+              Your own uploaded photos and files will also be removed from cloud storage.
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setClearOpen(false)}
+              disabled={clearing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void onConfirmClear()}
+              disabled={clearing}
+            >
+              {clearing ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

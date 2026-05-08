@@ -90,6 +90,30 @@ export const messageService = {
     const { data } = await api.delete<ApiResponse<Message>>(`/messages/${messageId}/everyone`);
     return data.data;
   },
+  async edit(
+    messageId: string,
+    payload: {
+      content: string;
+      encryption?: {
+        enabled: boolean;
+        iv?: string;
+        keys: { user: string; key: string }[];
+      };
+    },
+  ): Promise<Message> {
+    const { data } = await api.patch<ApiResponse<Message>>(`/messages/${messageId}`, payload);
+    return data.data;
+  },
+  async clearChat(
+    chatId: string,
+    withMedia: boolean,
+  ): Promise<{ cleared: number; mediaDeleted: number }> {
+    const { data } = await api.delete<ApiResponse<{ cleared: number; mediaDeleted: number }>>(
+      `/messages/${chatId}/clear`,
+      { params: { withMedia: withMedia ? 'true' : 'false' } },
+    );
+    return data.data;
+  },
 };
 
 export const uploadService = {

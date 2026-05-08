@@ -10,6 +10,7 @@ import {
   Download,
   FileIcon,
   MoreVertical,
+  Pencil,
   Trash2,
   UserMinus,
 } from 'lucide-react';
@@ -37,6 +38,10 @@ interface Props {
   membersCount: number;
 }
 
+/** Edits older than 15 minutes hit a backend window check, so don't even show
+ *  the option client-side. */
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
+
 export function MessageBubble({
   message,
   currentUserId,
@@ -51,30 +56,49 @@ export function MessageBubble({
   const allRead = readByOthers >= Math.max(0, membersCount - 1) && membersCount > 1;
 
   const removeMessage = useChatStore((s) => s.removeMessage);
+  const restoreMessage = useChatStore((s) => s.restoreMessage);
+  const updateMessage = useChatStore((s) => s.updateMessage);
   const markMessageDeleted = useChatStore((s) => s.markMessageDeleted);
+  const startEditing = useChatStore((s) => s.startEditing);
 
   const [busy, setBusy] = useState(false);
 
+  /* Optimistic delete-for-me: drop the message from the local list immediately,
+   * then call the API in the background. If the API fails, slot it back in at
+   * its original position so the user doesn't lose anything. */
   const onDeleteForMe = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
+    const list = useChatStore.getState().messagesByChat[message.chat] ?? [];
+    const originalIndex = list.findIndex((m) => m._id === message._id);
+    const snapshot: Message = { ...message };
+    removeMessage(message.chat, message._id);
     try {
       await messageService.deleteForMe(message._id);
-      removeMessage(message.chat, message._id);
     } catch {
+      restoreMessage(message.chat, snapshot, originalIndex >= 0 ? originalIndex : list.length);
       toast.error('Could not delete the message');
     } finally {
       setBusy(false);
     }
   };
 
+  /* Optimistic delete-for-everyone: tombstone immediately, rollback on failure. */
   const onDeleteForEveryone = async (): Promise<void> => {
     if (busy) return;
     setBusy(true);
+    const snapshot: Message = { ...message };
+    markMessageDeleted(message.chat, message._id);
     try {
       await messageService.deleteForEveryone(message._id);
-      markMessageDeleted(message.chat, message._id);
     } catch {
+      updateMessage(message.chat, message._id, {
+        deleted: false,
+        content: snapshot.content,
+        attachment: snapshot.attachment,
+        plaintext: snapshot.plaintext,
+        encryption: snapshot.encryption,
+      });
       toast.error('Could not delete the message');
     } finally {
       setBusy(false);
@@ -99,8 +123,6 @@ export function MessageBubble({
     );
   }
 
-  /* Display body: prefer cached `plaintext` when the wire payload was
-     encrypted; otherwise fall back to `content` directly. */
   const body =
     message.encryption?.enabled && message.plaintext === undefined
       ? '🔒 Decrypting…'
@@ -109,6 +131,9 @@ export function MessageBubble({
   const isOptimistic = Boolean(message.pending);
   const failed = Boolean(message.failed);
   const canDeleteForEveryone = mine && !isOptimistic && !failed;
+  const ageMs = Date.now() - new Date(message.createdAt).getTime();
+  const canEdit =
+    mine && !isOptimistic && !failed && message.type === 'text' && ageMs < EDIT_WINDOW_MS;
 
   return (
     <motion.div
@@ -158,7 +183,7 @@ export function MessageBubble({
                     'absolute -top-2 z-10 grid h-6 w-6 place-items-center rounded-full border bg-background text-foreground/80 opacity-0 shadow-md outline-none transition-opacity',
                     'hover:opacity-100 focus-visible:opacity-100 group-hover/msg:opacity-100',
                     'data-[state=open]:opacity-100 sm:group-hover/msg:opacity-100',
-                    mine ? '-right-2' : '-right-2',
+                    '-right-2',
                   )}
                 >
                   <MoreVertical className="h-3.5 w-3.5" />
@@ -169,6 +194,24 @@ export function MessageBubble({
                 className="w-52"
                 sideOffset={6}
               >
+                {canEdit && (
+                  <>
+                    <DropdownMenuItem
+                      disabled={busy}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        startEditing(
+                          message.chat,
+                          message._id,
+                          message.plaintext ?? message.content,
+                        );
+                      }}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" /> Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem
                   disabled={busy}
                   onSelect={(e) => {
@@ -180,19 +223,16 @@ export function MessageBubble({
                   <UserMinus className="mr-2 h-4 w-4" /> Delete for me
                 </DropdownMenuItem>
                 {canDeleteForEveryone && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={busy}
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        void onDeleteForEveryone();
-                      }}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
-                    </DropdownMenuItem>
-                  </>
+                  <DropdownMenuItem
+                    disabled={busy}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      void onDeleteForEveryone();
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
+                  </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -240,6 +280,7 @@ export function MessageBubble({
               mine ? 'text-primary-foreground/70' : 'text-muted-foreground',
             )}
           >
+            {message.edited && <span className="italic opacity-80">edited</span>}
             <span>{formatTime(message.createdAt)}</span>
             {mine &&
               (failed ? (

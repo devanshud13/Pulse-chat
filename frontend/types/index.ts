@@ -41,6 +41,7 @@ export interface Message {
   readBy: string[];
   deliveredTo: string[];
   edited: boolean;
+  editedAt?: string;
   deleted: boolean;
   deletedFor?: string[];
   encryption?: MessageEncryption;
