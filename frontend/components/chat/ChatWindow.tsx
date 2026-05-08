@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import type { Chat, Message, User } from '@/types';
@@ -40,7 +40,15 @@ export function ChatWindow({ chat, onBack }: Props): JSX.Element {
   const [page, setPage] = useState(1);
   const [showInfo, setShowInfo] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const initialLoad = useRef(true);
+  /* Wraps every group inside the scroll container; observed by ResizeObserver
+   * so we can re-snap to the bottom whenever its height grows (new message,
+   * decryption populating a longer plaintext, image finishes loading, etc.). */
+  const innerRef = useRef<HTMLDivElement>(null);
+  /* Sticky pin: while true, every content-height change auto-snaps the scroll
+   * to the bottom. We turn it off the instant the user scrolls up themselves
+   * (tracked in `onScroll`) and turn it back on whenever they scroll back to
+   * the bottom. Initial value `true` ensures opening a chat lands at the bottom. */
+  const stickyRef = useRef(true);
 
   useEffect(() => {
     applyPresenceFromMembers(chat.members);
@@ -58,9 +66,9 @@ export function ChatWindow({ chat, onBack }: Props): JSX.Element {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    initialLoad.current = true;
     setPage(1);
     setHasMore(true);
+    stickyRef.current = true;
     (async () => {
       try {
         const res = await messageService.list(chat._id, 1, 30);
@@ -84,26 +92,43 @@ export function ChatWindow({ chat, onBack }: Props): JSX.Element {
     clearUnread(chat._id);
   }, [chat._id, messages.length, user, clearUnread]);
 
-  useEffect(() => {
-    if (!scrollRef.current) return;
-    if (initialLoad.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      initialLoad.current = false;
-      return;
-    }
-    const last = messages[messages.length - 1];
-    if (!last) return;
-    const senderId = typeof last.sender === 'string' ? last.sender : last.sender._id;
-    const isMine = senderId === user?._id;
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto'): void => {
     const el = scrollRef.current;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-    if (isMine || nearBottom) {
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    }
-  }, [messages, user?._id]);
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  /* On chat switch, force-pin to bottom and snap immediately. We snap once
+   * synchronously and once on the next animation frame so that even if the
+   * messages render *after* this effect fires, we still land at the bottom. */
+  useEffect(() => {
+    stickyRef.current = true;
+    scrollToBottom('auto');
+    const id = requestAnimationFrame(() => scrollToBottom('auto'));
+    return () => cancelAnimationFrame(id);
+  }, [chat._id, scrollToBottom]);
+
+  /* Watch the inner content for any size change — covers new messages,
+   * decryption replacing "🔒 Decrypting…" with longer plaintext, images
+   * finishing their load, the typing indicator appearing, etc. While the
+   * pin is sticky, every growth instantly re-snaps us to the bottom; once
+   * the user scrolls up the pin clears and we leave them alone. */
+  useEffect(() => {
+    const inner = innerRef.current;
+    if (!inner) return;
+    const ro = new ResizeObserver(() => {
+      if (stickyRef.current) scrollToBottom('auto');
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [scrollToBottom]);
 
   const loadMore = async (): Promise<void> => {
     if (loading || !hasMore) return;
+    /* Loading older messages prepends content above; explicitly opt out of
+     * sticky-bottom while we adjust scrollTop manually to preserve the user's
+     * reading position. */
+    stickyRef.current = false;
     const el = scrollRef.current;
     const prevHeight = el?.scrollHeight ?? 0;
     setLoading(true);
@@ -124,6 +149,10 @@ export function ChatWindow({ chat, onBack }: Props): JSX.Element {
   const onScroll = (): void => {
     const el = scrollRef.current;
     if (!el) return;
+    /* Re-evaluate stickiness on every user scroll: at-bottom pins again so
+     * subsequent growth follows them; scrolling up unpins so new messages
+     * don't yank them down while they're reading older history. */
+    stickyRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (el.scrollTop < 80) void loadMore();
   };
 
@@ -164,56 +193,58 @@ export function ChatWindow({ chat, onBack }: Props): JSX.Element {
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex-1 space-y-1 overflow-y-auto py-3 scrollbar-thin"
+          className="flex-1 overflow-y-auto py-3 scrollbar-thin"
         >
-          {hasMore && (
-            <div className="flex justify-center py-2">
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : (
-                <button
-                  onClick={() => void loadMore()}
-                  className="text-xs text-muted-foreground hover:underline"
-                >
-                  Load earlier messages
-                </button>
-              )}
-            </div>
-          )}
-          {grouped.map((g) => (
-            <motion.div
-              key={g.date}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-1"
-            >
-              <div className="my-2 flex items-center justify-center">
-                <span className="rounded-full bg-muted/60 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {g.date}
-                </span>
+          <div ref={innerRef} className="space-y-1">
+            {hasMore && (
+              <div className="flex justify-center py-2">
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <button
+                    onClick={() => void loadMore()}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Load earlier messages
+                  </button>
+                )}
               </div>
-              {g.messages.map((m, idx) => {
-                const senderId = typeof m.sender === 'string' ? m.sender : m.sender._id;
-                const prev = g.messages[idx - 1];
-                const prevSender = prev
-                  ? typeof prev.sender === 'string'
-                    ? prev.sender
-                    : prev.sender._id
-                  : null;
-                const showAvatar = prevSender !== senderId;
-                return (
-                  <MessageBubble
-                    key={m._id}
-                    message={m}
-                    currentUserId={user?._id ?? ''}
-                    showAvatar={showAvatar}
-                    isGroup={chat.isGroup}
-                    membersCount={chat.members.length}
-                  />
-                );
-              })}
-            </motion.div>
-          ))}
+            )}
+            {grouped.map((g) => (
+              <motion.div
+                key={g.date}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-1"
+              >
+                <div className="my-2 flex items-center justify-center">
+                  <span className="rounded-full bg-muted/60 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {g.date}
+                  </span>
+                </div>
+                {g.messages.map((m, idx) => {
+                  const senderId = typeof m.sender === 'string' ? m.sender : m.sender._id;
+                  const prev = g.messages[idx - 1];
+                  const prevSender = prev
+                    ? typeof prev.sender === 'string'
+                      ? prev.sender
+                      : prev.sender._id
+                    : null;
+                  const showAvatar = prevSender !== senderId;
+                  return (
+                    <MessageBubble
+                      key={m._id}
+                      message={m}
+                      currentUserId={user?._id ?? ''}
+                      showAvatar={showAvatar}
+                      isGroup={chat.isGroup}
+                      membersCount={chat.members.length}
+                    />
+                  );
+                })}
+              </motion.div>
+            ))}
+          </div>
         </div>
         <TypingIndicator names={typingNames} />
         <MessageComposer chat={chat} />

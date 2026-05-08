@@ -65,8 +65,12 @@ export function MessageComposer({ chat }: Props): JSX.Element {
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [sending, setSending] = useState(false);
+  /* Edits go through a single in-place update so we lock the composer for the
+   * brief moment that takes. New-message sends, on the other hand, are fully
+   * independent (each owns its own optimistic temp id) so we *never* lock the
+   * composer for them — the user can fire off as many messages as they want
+   * back-to-back without waiting for prior ones to confirm. */
+  const [editSaving, setEditSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
@@ -174,7 +178,7 @@ export function MessageComposer({ chat }: Props): JSX.Element {
 
   /** PATCH the existing message (re-encrypted if E2E) and update the local store. */
   const sendEdit = async (): Promise<void> => {
-    if (sending || !me || !editing) return;
+    if (editSaving || !me || !editing) return;
     const trimmed = text.trim();
     if (!trimmed) return;
     if (trimmed === editing.plaintext) {
@@ -182,7 +186,7 @@ export function MessageComposer({ chat }: Props): JSX.Element {
       return;
     }
 
-    setSending(true);
+    setEditSaving(true);
     /* Optimistic in-place update — flip the body to the new text and tag it
        as edited so the user sees "edited" immediately. */
     updateMessage(chatId, editing.messageId, {
@@ -227,17 +231,19 @@ export function MessageComposer({ chat }: Props): JSX.Element {
         content: editing.plaintext,
       });
     } finally {
-      setSending(false);
+      setEditSaving(false);
     }
   };
 
   const send = async (): Promise<void> => {
     if (isEditing) return sendEdit();
-    if (sending || !me) return;
+    if (!me) return;
     const trimmed = text.trim();
     if (!trimmed && !pendingFile) return;
 
-    setSending(true);
+    /* No global lock — each send manages its own optimistic message via a
+     * unique tempId. The user can fire as many sends as they like; in-flight
+     * ones display a clock icon on their own bubble. */
     const tempId = newTempId();
     const now = new Date().toISOString();
     const fileForOptimistic = pendingFile;
@@ -279,9 +285,7 @@ export function MessageComposer({ chat }: Props): JSX.Element {
     try {
       let attachment;
       if (fileForOptimistic) {
-        setUploading(true);
         const uploaded = await uploadService.upload(fileForOptimistic);
-        setUploading(false);
         attachment = uploaded;
       }
 
@@ -325,9 +329,6 @@ export function MessageComposer({ chat }: Props): JSX.Element {
       if (fileForOptimistic) {
         setTimeout(() => removeMessage(chatId, tempId), 5000);
       }
-    } finally {
-      setSending(false);
-      setUploading(false);
     }
   };
 
@@ -422,7 +423,7 @@ export function MessageComposer({ chat }: Props): JSX.Element {
         />
         <Button
           onClick={send}
-          disabled={sending || uploading || (isEditing && !text.trim())}
+          disabled={isEditing ? editSaving || !text.trim() : !text.trim() && !pendingFile}
           size="icon"
           aria-label={isEditing ? 'Save edit' : 'Send'}
         >

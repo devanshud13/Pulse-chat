@@ -38,7 +38,7 @@ export const env: EnvConfig = {
   MONGODB_URI: process.env.MONGODB_URI as string,
   JWT_SECRET: process.env.JWT_SECRET as string,
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET as string,
-  JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
+  JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN ?? '1d',
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN ?? '30d',
   CLIENT_URL: process.env.CLIENT_URL as string,
   EXTENSION_ORIGIN: process.env.EXTENSION_ORIGIN ?? '',
