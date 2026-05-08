@@ -3,7 +3,8 @@ import { useAuthStore } from '@/store/auth.store';
 import { useCallStore } from '@/store/call.store';
 import { toast } from 'sonner';
 import { createPeerConnection, bindRemoteStream } from './peerConnection';
-import { acquireLocalMedia, acquireDisplayMedia } from './mediaManager';
+import { acquireDisplayMedia } from './mediaManager';
+import { requestCallMedia } from '@/lib/mediaPermissions';
 
 type WireSdp = RTCSessionDescriptionInit;
 
@@ -110,21 +111,38 @@ export class WebRtcCallManager {
     this.socketBound = false;
   }
 
-  /** Outgoing: show UI immediately, then ask server to ring peer. */
+  /** Outgoing: pre-flight media permission, then show UI and ring peer. */
   startOutgoing(
     chatId: string,
     type: 'audio' | 'video',
     peer: { id: string; name: string; avatar?: string },
   ): void {
-    useCallStore.getState().setOutgoingRinging({
-      callId: null,
-      chatId,
-      type,
-      peerId: peer.id,
-      peerName: peer.name,
-      peerAvatar: peer.avatar,
-    });
-    getSocket().emit('call-user', { chatId, type });
+    void (async () => {
+      /* Asking permission *before* socket emits keeps the UX clean: the
+         caller never sees a "ringing" UI for a call they're not actually
+         allowed to make. */
+      const result = await requestCallMedia(type);
+      if (result.kind !== 'granted') {
+        useCallStore.getState().setPermissionIssue(result);
+        return;
+      }
+      this.releaseLocalMedia();
+      this.localStream = result.stream;
+      this.localStop = () => {
+        result.stream.getTracks().forEach((t) => t.stop());
+      };
+      useCallStore.getState().setCameraOn(result.stream.getVideoTracks().length > 0);
+      this.emitStreams();
+      useCallStore.getState().setOutgoingRinging({
+        callId: null,
+        chatId,
+        type,
+        peerId: peer.id,
+        peerName: peer.name,
+        peerAvatar: peer.avatar,
+      });
+      getSocket().emit('call-user', { chatId, type });
+    })();
   }
 
   cancelOutgoingIfPending(): void {
@@ -385,32 +403,46 @@ export class WebRtcCallManager {
   }
 
   private async prepareCalleeMedia(kind: 'audio' | 'video'): Promise<void> {
-    try {
-      this.releaseLocalMedia();
-      const cap: 'audio' | 'video' = kind === 'audio' ? 'audio' : 'video';
-      const { stream, stop } = await acquireLocalMedia(cap);
-      this.localStream = stream;
-      this.localStop = stop;
-      useCallStore.getState().setCameraOn(stream.getVideoTracks().length > 0);
-      this.emitStreams();
-    } catch {
-      toast.error('Microphone or camera permission denied');
+    this.releaseLocalMedia();
+    const result = await requestCallMedia(kind);
+    if (result.kind !== 'granted') {
+      /* Reject server-side so the caller's UI dismisses instantly, then
+         surface a friendly explainer modal locally. */
       const { callId } = useCallStore.getState();
       if (callId) getSocket().emit('reject-call', { callId });
       this.cleanupPeer();
       useCallStore.getState().reset();
+      useCallStore.getState().setPermissionIssue(result);
+      return;
     }
+    this.localStream = result.stream;
+    this.localStop = () => {
+      result.stream.getTracks().forEach((t) => t.stop());
+    };
+    useCallStore.getState().setCameraOn(result.stream.getVideoTracks().length > 0);
+    this.emitStreams();
   }
 
   private async runCallerNegotiation(p: AcceptedPayload): Promise<void> {
-    const kind = p.type;
     const callId = useCallStore.getState().callId;
     if (!callId) return;
     try {
-      this.releaseLocalMedia();
-      const { stream, stop } = await acquireLocalMedia(kind === 'audio' ? 'audio' : 'video');
-      this.localStream = stream;
-      this.localStop = stop;
+      /* The caller already pre-acquired media in startOutgoing, but if it
+         was somehow released (logout race, tab switch, etc.) re-request it
+         before negotiating instead of failing the call. */
+      if (!this.localStream) {
+        const result = await requestCallMedia(p.type);
+        if (result.kind !== 'granted') {
+          useCallStore.getState().setPermissionIssue(result);
+          this.endCall();
+          return;
+        }
+        this.localStream = result.stream;
+        this.localStop = () => {
+          result.stream.getTracks().forEach((t) => t.stop());
+        };
+      }
+      const stream = this.localStream;
       useCallStore.getState().setCameraOn(stream.getVideoTracks().length > 0);
       this.emitStreams();
 

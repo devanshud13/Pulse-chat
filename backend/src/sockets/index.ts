@@ -7,7 +7,7 @@ import { setUserStatusService } from '../services/user.service';
 import { registerChatHandlers } from './chat.handlers';
 import { registerCallHandlers } from './call.handlers';
 import { setSocketServer, getSocketServer } from './ioRegistry';
-import { forceEndCallsForUser } from '../services/callSession.service';
+import { forceEndCallsForUser, logFailedCall } from '../services/callSession.service';
 
 export interface AuthedSocket extends Socket {
   data: {
@@ -83,6 +83,14 @@ export const initSocket = (httpServer: HttpServer): Server => {
         const payload = { callId: ended.callId, by: userId, reason: 'peer-left' as const };
         ioServer.to(`user:${ended.callerId}`).emit('call:ended', payload);
         ioServer.to(`user:${ended.calleeId}`).emit('call:ended', payload);
+        /* Active call dropped because a participant disconnected — log it
+           as failed so both peers see the inline "call failed" row. */
+        logFailedCall({
+          chatId: ended.chatId,
+          callerId: ended.callerId,
+          calleeId: ended.calleeId,
+          callType: ended.type,
+        });
       }
       await setUserStatusService(userId, 'offline');
       socket.broadcast.emit('presence:update', {

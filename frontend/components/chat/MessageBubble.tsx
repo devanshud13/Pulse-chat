@@ -29,6 +29,7 @@ import { messageService } from '@/services/chat.service';
 import { useChatStore } from '@/store/chat.store';
 import { cn } from '@/utils/cn';
 import { formatBytes, formatTime } from '@/utils/format';
+import { CallEventRow } from './CallEventRow';
 
 interface Props {
   message: Message;
@@ -104,6 +105,12 @@ export function MessageBubble({
       setBusy(false);
     }
   };
+
+  /* Call event rows are inline system messages, not chat bubbles, so they
+   * don't go through the read/edit/avatar layout pipeline below. */
+  if (message.type === 'call') {
+    return <CallEventRow message={message} currentUserId={currentUserId} />;
+  }
 
   if (message.deleted) {
     return (

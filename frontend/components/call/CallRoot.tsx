@@ -6,6 +6,7 @@ import { useCallStore } from '@/store/call.store';
 import { webRtcCallManager } from '@/webrtc/callManager';
 import { IncomingCallModal } from './IncomingCallModal';
 import { ActiveCallShell } from './ActiveCallShell';
+import { PermissionPrompt } from './PermissionPrompt';
 
 export function CallRoot(): JSX.Element {
   const userId = useAuthStore((s) => s.user?._id ?? null);
@@ -14,6 +15,8 @@ export function CallRoot(): JSX.Element {
   const peerAvatar = useCallStore((s) => s.peerAvatar);
   const peerId = useCallStore((s) => s.peerId);
   const callType = useCallStore((s) => s.callType);
+  const permissionIssue = useCallStore((s) => s.permissionIssue);
+  const setPermissionIssue = useCallStore((s) => s.setPermissionIssue);
 
   useEffect(() => {
     if (!userId) {
@@ -38,6 +41,12 @@ export function CallRoot(): JSX.Element {
         />
       )}
       <ActiveCallShell phase={phase} />
+      {permissionIssue && (
+        <PermissionPrompt
+          failure={permissionIssue}
+          onClose={() => setPermissionIssue(null)}
+        />
+      )}
     </>
   );
 }

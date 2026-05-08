@@ -31,11 +31,20 @@ export interface MessageEncryption {
   keys: MessageEncryptionKey[];
 }
 
+export type CallEventStatus = 'completed' | 'rejected' | 'missed' | 'failed';
+
+export interface CallMeta {
+  callType: 'audio' | 'video';
+  status: CallEventStatus;
+  durationSec?: number;
+  initiator: string;
+}
+
 export interface Message {
   _id: string;
   chat: string;
   sender: User | string;
-  type: 'text' | 'image' | 'file';
+  type: 'text' | 'image' | 'file' | 'call';
   content: string;
   attachment?: Attachment;
   readBy: string[];
@@ -45,6 +54,7 @@ export interface Message {
   deleted: boolean;
   deletedFor?: string[];
   encryption?: MessageEncryption;
+  callMeta?: CallMeta;
   createdAt: string;
   updatedAt: string;
   /** Client-side only — `true` while the message is being sent (no server _id yet). */

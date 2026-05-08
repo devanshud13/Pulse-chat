@@ -26,17 +26,28 @@ export function ChatListItem({ chat, currentUserId, active, unread, onClick }: P
    * unwrapping it (see `useDecryptedChatPreviews`) we show an empty subtitle
    * rather than a "🔒 Encrypted message" placeholder — the real text fills in
    * a tick later once decryption resolves. */
+  const callPreview = (() => {
+    if (!last || last.type !== 'call' || !last.callMeta) return null;
+    const t = last.callMeta.callType === 'video' ? 'Video call' : 'Audio call';
+    if (last.callMeta.status === 'completed') return `${t} ended`;
+    if (last.callMeta.status === 'rejected') return `${t} declined`;
+    if (last.callMeta.status === 'missed') return `Missed ${t.toLowerCase()}`;
+    return `${t} failed`;
+  })();
+
   const subtitle = !last
     ? 'Say hi 👋'
     : last.deleted
       ? 'Message deleted'
-      : last.type === 'image'
-        ? '📷 Photo'
-        : last.type === 'file'
-          ? '📎 File'
-          : last.encryption?.enabled
-            ? last.plaintext ?? ''
-            : last.content || 'Say hi 👋';
+      : callPreview
+        ? callPreview
+        : last.type === 'image'
+          ? '📷 Photo'
+          : last.type === 'file'
+            ? '📎 File'
+            : last.encryption?.enabled
+              ? last.plaintext ?? ''
+              : last.content || 'Say hi 👋';
 
   return (
     <motion.button

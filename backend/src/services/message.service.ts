@@ -1,5 +1,12 @@
 import { Types } from 'mongoose';
-import { Message, IAttachment, IEncryption, IMessage, MessageType } from '../models/Message';
+import {
+  Message,
+  IAttachment,
+  IEncryption,
+  IMessage,
+  MessageType,
+  CallEventStatus,
+} from '../models/Message';
 import { Chat } from '../models/Chat';
 import { ApiError } from '../utils/ApiError';
 import { cloudinary } from '../config/cloudinary';
@@ -262,6 +269,43 @@ export const clearChatForUserService = async (
   );
 
   return { cleared: result.modifiedCount ?? 0, mediaDeleted };
+};
+
+/** Inserts an inline call event row into the chat (e.g. "Audio call · 12m").
+ *  Sender is the call initiator; the row is unencrypted because both parties
+ *  already saw the call live. The chat's `lastMessage` is also bumped so the
+ *  sidebar preview updates without a separate write. */
+export const createCallEventMessage = async (params: {
+  chatId: string;
+  callerId: string;
+  callType: 'audio' | 'video';
+  status: CallEventStatus;
+  durationSec?: number;
+}): Promise<IMessage> => {
+  const chat = await Chat.findById(params.chatId);
+  if (!chat) throw ApiError.notFound('Chat not found');
+
+  const message = await Message.create({
+    chat: new Types.ObjectId(params.chatId),
+    sender: new Types.ObjectId(params.callerId),
+    type: 'call',
+    content: '',
+    readBy: chat.members.map((m) => new Types.ObjectId(m.toString())),
+    deliveredTo: chat.members.map((m) => new Types.ObjectId(m.toString())),
+    encryption: { enabled: false, keys: [] },
+    callMeta: {
+      callType: params.callType,
+      status: params.status,
+      durationSec: params.durationSec,
+      initiator: new Types.ObjectId(params.callerId),
+    },
+  });
+
+  chat.lastMessage = message._id;
+  chat.updatedAt = new Date();
+  await chat.save();
+
+  return message.populate(POPULATE_SENDER);
 };
 
 /** @deprecated kept for backwards compat — equivalent to delete-for-everyone. */

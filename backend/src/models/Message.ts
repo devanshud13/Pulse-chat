@@ -1,6 +1,21 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
-export type MessageType = 'text' | 'image' | 'file';
+export type MessageType = 'text' | 'image' | 'file' | 'call';
+
+/**
+ * Call event metadata embedded in messages of `type: 'call'`. These are the
+ * inline "call ended in 5m / call declined / missed call" rows rendered in
+ * the chat thread, not full call records (those live in `CallLog`).
+ */
+export type CallEventStatus = 'completed' | 'rejected' | 'missed' | 'failed';
+export interface ICallMeta {
+  callType: 'audio' | 'video';
+  status: CallEventStatus;
+  /** Total ringing+talking duration in seconds — only set for `completed`. */
+  durationSec?: number;
+  /** The user who initiated the call. */
+  initiator: Types.ObjectId;
+}
 
 export interface IAttachment {
   url: string;
@@ -42,6 +57,7 @@ export interface IMessage extends Document {
   /** User ids that hid this message for themselves only. */
   deletedFor: Types.ObjectId[];
   encryption: IEncryption;
+  callMeta?: ICallMeta;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,11 +90,25 @@ const encryptionSchema = new Schema<IEncryption>(
   { _id: false },
 );
 
+const callMetaSchema = new Schema<ICallMeta>(
+  {
+    callType: { type: String, enum: ['audio', 'video'], required: true },
+    status: {
+      type: String,
+      enum: ['completed', 'rejected', 'missed', 'failed'],
+      required: true,
+    },
+    durationSec: { type: Number, min: 0 },
+    initiator: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { _id: false },
+);
+
 const messageSchema = new Schema<IMessage>(
   {
     chat: { type: Schema.Types.ObjectId, ref: 'Chat', required: true, index: true },
     sender: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    type: { type: String, enum: ['text', 'image', 'file'], default: 'text' },
+    type: { type: String, enum: ['text', 'image', 'file', 'call'], default: 'text' },
     content: { type: String, default: '', maxlength: 20000 },
     attachment: { type: attachmentSchema, default: undefined },
     readBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
@@ -88,6 +118,7 @@ const messageSchema = new Schema<IMessage>(
     deleted: { type: Boolean, default: false },
     deletedFor: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     encryption: { type: encryptionSchema, default: () => ({ enabled: false, keys: [] }) },
+    callMeta: { type: callMetaSchema, default: undefined },
   },
   { timestamps: true },
 );

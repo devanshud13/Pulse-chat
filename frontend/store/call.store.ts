@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { PermissionFailure } from '@/lib/mediaPermissions';
 
 export type CallPhase =
   | 'idle'
@@ -30,6 +31,8 @@ export interface CallStoreState {
   networkQuality: NetworkQuality;
   error: string | null;
   durationSec: number;
+  /** Surfaces "we couldn't access your hardware" UI without aborting via toast. */
+  permissionIssue: PermissionFailure | null;
 }
 
 interface CallStoreActions {
@@ -66,6 +69,7 @@ interface CallStoreActions {
   tickDuration: () => void;
   clearDuration: () => void;
   setCallId: (callId: string) => void;
+  setPermissionIssue: (issue: PermissionFailure | null) => void;
 }
 
 const initial: CallStoreState = {
@@ -88,6 +92,7 @@ const initial: CallStoreState = {
   networkQuality: 'unknown',
   error: null,
   durationSec: 0,
+  permissionIssue: null,
 };
 
 export const useCallStore = create<CallStoreState & CallStoreActions>((set) => ({
@@ -155,4 +160,5 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
   tickDuration: () => set((s) => ({ durationSec: s.durationSec + 1 })),
   clearDuration: () => set({ durationSec: 0 }),
   setCallId: (callId) => set({ callId }),
+  setPermissionIssue: (issue) => set({ permissionIssue: issue }),
 }));

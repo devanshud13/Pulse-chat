@@ -4,6 +4,9 @@ import { User } from '../models/User';
 import { CallLog } from '../models/CallLog';
 import { getSocketServer } from '../sockets/ioRegistry';
 import { logger } from '../utils/logger';
+import { createCallEventMessage } from './message.service';
+import { broadcastNewMessage } from '../sockets/emitters';
+import type { CallEventStatus } from '../models/Message';
 
 export type CallType = 'audio' | 'video';
 
@@ -58,20 +61,39 @@ async function logCall(params: {
   callerId: string;
   calleeId: string;
   callType: CallType;
-  status: 'missed' | 'rejected' | 'completed';
+  status: CallEventStatus;
   durationSec?: number;
 }): Promise<void> {
   try {
-    await CallLog.create({
-      chat: params.chatId,
-      caller: params.callerId,
-      callee: params.calleeId,
+    if (params.status !== 'failed') {
+      /* CallLog only tracks finished real calls — failures are surfaced as
+         the inline message row instead so the user has actionable context. */
+      await CallLog.create({
+        chat: params.chatId,
+        caller: params.callerId,
+        callee: params.calleeId,
+        callType: params.callType,
+        status: params.status,
+        durationSec: params.durationSec,
+      });
+    }
+  } catch (err) {
+    logger.error('CallLog create failed', err);
+  }
+
+  /* Always also drop an inline "call event" message into the chat so both
+     participants see persistent, scrollable context (matches WhatsApp). */
+  try {
+    const msg = await createCallEventMessage({
+      chatId: params.chatId,
+      callerId: params.callerId,
       callType: params.callType,
       status: params.status,
       durationSec: params.durationSec,
     });
+    await broadcastNewMessage(msg);
   } catch (err) {
-    logger.error('CallLog create failed', err);
+    logger.error('createCallEventMessage failed', err);
   }
 }
 
@@ -191,5 +213,39 @@ export function logCompletedCall(params: {
     callType: params.callType,
     status: 'completed',
     durationSec: params.durationSec,
+  });
+}
+
+/** Logs a 'failed' inline call message — used when the peer disconnects or
+ *  ICE/media negotiation never finishes. Distinct from `missed` (no answer). */
+export function logFailedCall(params: {
+  chatId: string;
+  callerId: string;
+  calleeId: string;
+  callType: CallType;
+}): void {
+  void logCall({
+    chatId: params.chatId,
+    callerId: params.callerId,
+    calleeId: params.calleeId,
+    callType: params.callType,
+    status: 'failed',
+  });
+}
+
+/** Logs a 'missed' inline call message — used when the caller cancels
+ *  ringing before the callee picks up, mirroring native phone behavior. */
+export function logMissedCall(params: {
+  chatId: string;
+  callerId: string;
+  calleeId: string;
+  callType: CallType;
+}): void {
+  void logCall({
+    chatId: params.chatId,
+    callerId: params.callerId,
+    calleeId: params.calleeId,
+    callType: params.callType,
+    status: 'missed',
   });
 }

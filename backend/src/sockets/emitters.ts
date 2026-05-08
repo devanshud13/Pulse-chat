@@ -35,6 +35,9 @@ export const broadcastNewMessage = async (message: IMessage): Promise<void> => {
       const sanitized = filterEncryptionForRecipient(baseJson, memberStr);
       io.to(`user:${memberStr}`).emit('message:new', sanitized);
       if (memberStr === senderId) continue;
+      /* Call event rows are already surfaced live by the call UI/extension —
+         skip the message-style toast & DB notification for them. */
+      if (message.type === 'call') continue;
       io.to(`user:${memberStr}`).emit('notification:new', {
         chatId: message.chat.toString(),
         messageId: message._id.toString(),

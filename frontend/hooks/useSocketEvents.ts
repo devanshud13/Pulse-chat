@@ -62,8 +62,10 @@ export const useSocketEvents = (
       /* Audible alert for incoming messages from someone else when the user
          either isn't looking at this browser tab, or is reading a different
          chat. We deliberately key off the same conditions used for toasts so
-         a single source-of-truth governs "did the user see this yet?". */
-      if (me && senderId !== me) {
+         a single source-of-truth governs "did the user see this yet?".
+         Call event rows ('Audio call · 12m', etc.) skip the chime since the
+         call UI already produced its own ringtone/state changes. */
+      if (me && senderId !== me && msg.type !== 'call') {
         const tabHidden =
           typeof document !== 'undefined' &&
           (document.visibilityState !== 'visible' || !document.hasFocus());

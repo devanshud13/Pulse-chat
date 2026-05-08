@@ -2,7 +2,6 @@ import { User } from '../models/User';
 import { logger } from '../utils/logger';
 import type { AuthedSocket } from './index';
 import {
-  destroySession,
   getSession,
   markCallActive,
   rejectCallSession,
@@ -10,6 +9,7 @@ import {
   endCallByUser,
   validateDirectChat,
   logCompletedCall,
+  logMissedCall,
   type CallType,
 } from '../services/callSession.service';
 import { getSocketServer } from './ioRegistry';
@@ -113,6 +113,7 @@ export const registerCallHandlers = (socket: AuthedSocket): void => {
   socket.on('end-call', (payload: { callId?: string; durationSec?: number }) => {
     const callId = payload?.callId;
     if (!callId) return;
+    const wasRinging = getSession(callId)?.state === 'ringing';
     const s = endCallByUser(callId, userId);
     if (!s) return;
     const durationSec =
@@ -126,6 +127,15 @@ export const registerCallHandlers = (socket: AuthedSocket): void => {
         calleeId: s.calleeId,
         callType: s.type,
         durationSec,
+      });
+    } else if (wasRinging) {
+      /* Caller hung up before the callee picked up — same UX outcome as a
+         missed call (the callee's row should read "Missed audio call"). */
+      logMissedCall({
+        chatId: s.chatId,
+        callerId: s.callerId,
+        calleeId: s.calleeId,
+        callType: s.type,
       });
     }
     io.to(`user:${s.callerId}`).emit('call:ended', { callId, by: userId });
