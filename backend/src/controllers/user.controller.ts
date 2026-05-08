@@ -2,9 +2,11 @@ import { Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AuthenticatedRequest } from '../types';
 import {
+  getKeyBundleService,
   getMeService,
   getPublicKeysService,
   searchUsersService,
+  setKeyBundleService,
   setPublicKeyService,
   updateProfileService,
 } from '../services/user.service';
@@ -38,4 +40,16 @@ export const getPublicKeys = asyncHandler(async (req, res: Response) => {
     .filter(Boolean);
   const keys = await getPublicKeysService(ids);
   res.json({ success: true, data: keys });
+});
+
+export const setKeyBundle = asyncHandler(async (req, res: Response) => {
+  const me = (req as AuthenticatedRequest).user!.userId;
+  const user = await setKeyBundleService(me, req.body);
+  res.json({ success: true, data: user });
+});
+
+export const getKeyBundle = asyncHandler(async (req, res: Response) => {
+  const me = (req as AuthenticatedRequest).user!.userId;
+  const bundle = await getKeyBundleService(me);
+  res.json({ success: true, data: bundle });
 });

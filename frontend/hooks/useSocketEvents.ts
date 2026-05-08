@@ -38,8 +38,22 @@ export const useSocketEvents = (
     const onMessage = (msg: Message): void => {
       const me = useAuthStore.getState().user?._id;
       const selectedChatId = useChatStore.getState().selectedChatId;
-      useChatStore.getState().appendMessage(msg.chat, msg);
       const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender._id;
+
+      /* If this is our own message coming back via socket and we still have an
+         optimistic placeholder for it, swap that placeholder out instead of
+         appending — otherwise the chat shows the same message twice. */
+      if (me && senderId === me) {
+        const list = useChatStore.getState().messagesByChat[msg.chat] ?? [];
+        if (list.some((m) => m._id === msg._id)) return;
+        const pending = [...list].reverse().find((m) => m.pending);
+        if (pending) {
+          useChatStore.getState().replaceMessage(msg.chat, pending._id, msg);
+          return;
+        }
+      }
+
+      useChatStore.getState().appendMessage(msg.chat, msg);
       if (me && senderId !== me && msg.chat !== selectedChatId) {
         useChatStore.getState().bumpUnread(msg.chat);
       }

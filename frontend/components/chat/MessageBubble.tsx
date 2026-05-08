@@ -83,9 +83,17 @@ export function MessageBubble({
 
   if (message.deleted) {
     return (
-      <div className={cn('flex w-full px-2', mine ? 'justify-end' : 'justify-start')}>
-        <div className="rounded-2xl border border-dashed bg-muted/30 px-4 py-2 text-xs italic text-muted-foreground">
-          {mine ? 'You deleted this message' : 'This message was deleted'}
+      <div
+        className={cn(
+          'flex w-full items-end gap-2 px-2',
+          mine ? 'justify-end' : 'justify-start',
+        )}
+      >
+        {!mine && <div className="w-8 shrink-0" aria-hidden />}
+        <div className="max-w-[78%] sm:max-w-[60%]">
+          <div className="rounded-2xl border border-dashed bg-muted/30 px-4 py-2 text-xs italic text-muted-foreground">
+            {mine ? 'You deleted this message' : 'This message was deleted'}
+          </div>
         </div>
       </div>
     );

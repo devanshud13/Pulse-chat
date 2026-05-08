@@ -13,6 +13,14 @@ export interface IUser extends Document {
   refreshTokens: string[];
   /** Base64-encoded SPKI of the user's RSA-OAEP-2048 public key (used for E2E). */
   publicKey?: string;
+  /** PKCS#8 of the user's private key, AES-GCM-encrypted with a key derived from
+   *  their password (PBKDF2). The server can never decrypt this. Sync'd across
+   *  devices so any browser the user logs in on can recover the same key pair. */
+  encryptedPrivateKey?: string;
+  /** Base64 PBKDF2 salt used to derive the password-key for `encryptedPrivateKey`. */
+  keySalt?: string;
+  /** Base64 IV used to AES-GCM-encrypt `encryptedPrivateKey`. */
+  keyIv?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -37,6 +45,9 @@ const userSchema = new Schema<IUser>(
     lastSeen: { type: Date, default: Date.now },
     refreshTokens: { type: [String], default: [], select: false },
     publicKey: { type: String, default: '' },
+    encryptedPrivateKey: { type: String, default: '', select: false },
+    keySalt: { type: String, default: '', select: false },
+    keyIv: { type: String, default: '', select: false },
   },
   { timestamps: true },
 );

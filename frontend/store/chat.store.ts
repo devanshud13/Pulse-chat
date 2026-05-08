@@ -106,10 +106,29 @@ export const useChatStore = create<ChatState>((set) => ({
     set((state) => {
       const list = state.messagesByChat[chatId];
       if (!list) return {};
-      const idx = list.findIndex((m) => m._id === tempId);
-      if (idx === -1) return {};
-      const next = list.slice();
-      next[idx] = real;
+      const tempIdx = list.findIndex((m) => m._id === tempId);
+      const realIdx = list.findIndex((m) => m._id === real._id);
+
+      let next: Message[];
+      if (tempIdx === -1 && realIdx === -1) {
+        /* Neither the optimistic placeholder nor the canonical message is in the
+           list yet — just append the real one. */
+        next = [...list, real];
+      } else if (tempIdx === -1 && realIdx !== -1) {
+        /* The socket beat the HTTP response and already inserted the real msg —
+           merge our copy on top so we keep cached `plaintext` etc. */
+        next = list.slice();
+        next[realIdx] = { ...next[realIdx], ...real };
+      } else if (tempIdx !== -1 && realIdx === -1) {
+        /* Normal optimistic flow: swap the temp placeholder for the real msg. */
+        next = list.slice();
+        next[tempIdx] = real;
+      } else {
+        /* Race: both the temp and the real are already in the list (socket
+           arrived before HTTP and we never deduped). Drop the temp. */
+        next = list.filter((m) => m._id !== tempId);
+      }
+
       const chats = state.chats.map((c) =>
         c._id === chatId ? { ...c, lastMessage: real, updatedAt: real.createdAt } : c,
       );

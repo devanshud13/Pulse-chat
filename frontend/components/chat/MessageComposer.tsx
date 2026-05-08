@@ -45,6 +45,7 @@ export function MessageComposer({ chat }: Props): JSX.Element {
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiBtnRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +78,19 @@ export function MessageComposer({ chat }: Props): JSX.Element {
     window.addEventListener('mousedown', onClick);
     return () => window.removeEventListener('mousedown', onClick);
   }, [showEmoji]);
+
+  /* Auto-grow the textarea as the user types: reset to a single row first to
+     measure scrollHeight correctly, then clamp to ~6 lines so it can never push
+     the chat history off screen. */
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const max = 160; // roughly 6 lines of 14px text + padding
+    const next = Math.min(el.scrollHeight, max);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
+  }, [text]);
 
   const triggerTyping = (): void => {
     const socket = getSocket();
@@ -273,6 +287,7 @@ export function MessageComposer({ chat }: Props): JSX.Element {
           )}
         </div>
         <Textarea
+          ref={textareaRef}
           value={text}
           rows={1}
           onChange={(e) => {
@@ -281,7 +296,7 @@ export function MessageComposer({ chat }: Props): JSX.Element {
           }}
           onKeyDown={onKey}
           placeholder="Type a message…"
-          className="min-h-[40px] max-h-32 flex-1"
+          className="min-h-[40px] flex-1 resize-none leading-5"
         />
         <Button onClick={send} disabled={sending || uploading} size="icon" aria-label="Send">
           <SendHorizonal className="h-5 w-5" />

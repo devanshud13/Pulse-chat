@@ -35,7 +35,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const user = await authService.me();
       set({ user });
-      void keyService.ensureKeyPair(user._id, user.publicKey);
+      /* Hydrate has no password to work with, so only re-use whatever the
+         current browser already has. Multi-device sync happens at login time. */
+      void keyService.ensureKeyPair(user._id);
     } catch {
       resetChatState();
       set({ user: null });
@@ -51,7 +53,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authService.login({ email, password });
       resetChatState();
       set({ user: res.user });
-      void keyService.ensureKeyPair(res.user._id, res.user.publicKey);
+      /* unlockOrInit fetches the password-encrypted private key from the
+         server (if any) and decrypts it locally, so the same key pair works
+         on every browser the user logs into. */
+      void keyService.unlockOrInit(res.user._id, password);
     } finally {
       set({ loading: false });
     }
@@ -63,7 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authService.signup({ name, email, password });
       resetChatState();
       set({ user: res.user });
-      void keyService.ensureKeyPair(res.user._id, res.user.publicKey);
+      void keyService.unlockOrInit(res.user._id, password);
     } finally {
       set({ loading: false });
     }

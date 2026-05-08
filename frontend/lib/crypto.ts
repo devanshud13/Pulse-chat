@@ -120,3 +120,78 @@ export async function decryptEnvelope(
   );
   return dec.decode(plain);
 }
+
+/* ---- Password-protected private-key wrapping ---------------------------------
+ *
+ * The private RSA key never leaves the user's browser in plaintext, but we want
+ * the user to be able to log in from any browser. Solution:
+ *   1. Derive an AES-GCM key from their password + a random salt using PBKDF2.
+ *   2. Encrypt the PKCS#8 private key with that AES key.
+ *   3. Upload `{ encryptedPrivateKey, keySalt, keyIv }` to the server.
+ *
+ * The server can never read the private key — only the password holder can.
+ * On a fresh browser, we fetch the bundle and decrypt it locally.
+ */
+const PBKDF2_ITERATIONS = 150_000;
+
+export function generateRandomSalt(byteLength = 16): string {
+  const salt = window.crypto.getRandomValues(new Uint8Array(byteLength));
+  return bufToB64(salt);
+}
+
+async function deriveAesKeyFromPassword(
+  password: string,
+  saltB64: string,
+): Promise<CryptoKey> {
+  const subtle = getCrypto();
+  const baseKey = await subtle.importKey(
+    'raw',
+    enc.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  );
+  return subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: new Uint8Array(b64ToBuf(saltB64)),
+      iterations: PBKDF2_ITERATIONS,
+      hash: 'SHA-256',
+    },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+export async function wrapPrivateKey(
+  privateKey: CryptoKey,
+  password: string,
+): Promise<{ encryptedPrivateKey: string; keySalt: string; keyIv: string }> {
+  const subtle = getCrypto();
+  const salt = generateRandomSalt();
+  const aes = await deriveAesKeyFromPassword(password, salt);
+  const pkcs8 = await subtle.exportKey('pkcs8', privateKey);
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await subtle.encrypt({ name: 'AES-GCM', iv }, aes, pkcs8);
+  return {
+    encryptedPrivateKey: bufToB64(ciphertext),
+    keySalt: salt,
+    keyIv: bufToB64(iv),
+  };
+}
+
+export async function unwrapPrivateKey(
+  bundle: { encryptedPrivateKey: string; keySalt: string; keyIv: string },
+  password: string,
+): Promise<CryptoKey> {
+  const subtle = getCrypto();
+  const aes = await deriveAesKeyFromPassword(password, bundle.keySalt);
+  const pkcs8 = await subtle.decrypt(
+    { name: 'AES-GCM', iv: new Uint8Array(b64ToBuf(bundle.keyIv)) },
+    aes,
+    b64ToBuf(bundle.encryptedPrivateKey),
+  );
+  return subtle.importKey('pkcs8', pkcs8, RSA_ALGO, true, ['decrypt']);
+}

@@ -17,3 +17,10 @@ export const setPublicKeySchema = z.object({
 export const publicKeyQuerySchema = z.object({
   ids: z.string().min(1).max(2000),
 });
+
+export const setKeyBundleSchema = z.object({
+  publicKey: z.string().min(50).max(4096),
+  encryptedPrivateKey: z.string().min(50).max(8192),
+  keySalt: z.string().min(10).max(200),
+  keyIv: z.string().min(10).max(200),
+});

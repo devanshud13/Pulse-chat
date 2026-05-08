@@ -1,9 +1,16 @@
 /**
- * Manages this user's RSA key pair for end-to-end encryption:
- *   - Private key lives in localStorage (per-user, namespaced by userId).
- *   - Public key is uploaded to the backend so other clients can encrypt to us.
+ * Manages this user's RSA key pair for end-to-end encryption.
  *
- * Other users' public keys are fetched once and cached in memory for the session.
+ * To make E2E work across multiple browsers / devices for the same user we
+ * encrypt the private key with a key derived from their password (PBKDF2)
+ * and store *that* on the server alongside the public key. Any browser the
+ * user logs into can recover the same key pair by decrypting with the
+ * password they just typed.
+ *
+ *   - Login / signup → `unlockOrInit(userId, password)` does the dance.
+ *   - Page refresh / hydrate → `ensureKeyPair(userId)` only consults
+ *     localStorage (no password is available outside a fresh login).
+ *   - Logout → `clear()` wipes everything in this browser.
  */
 import { api } from './api';
 import {
@@ -11,10 +18,19 @@ import {
   exportPublicKey,
   generateRsaKeyPair,
   importPrivateKey,
+  unwrapPrivateKey,
+  wrapPrivateKey,
 } from '@/lib/crypto';
 import type { ApiResponse } from '@/types';
 
 const PRIV_KEY_PREFIX = 'chat_e2e_priv:';
+
+interface KeyBundle {
+  publicKey: string;
+  encryptedPrivateKey: string;
+  keySalt: string;
+  keyIv: string;
+}
 
 let cachedPrivate: { userId: string; key: CryptoKey } | null = null;
 const publicKeyCache = new Map<string, string>();
@@ -24,50 +40,114 @@ function lsKey(userId: string): string {
   return `${PRIV_KEY_PREFIX}${userId}`;
 }
 
+function hasSubtle(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.crypto?.subtle);
+}
+
+async function fetchServerBundle(): Promise<Partial<KeyBundle> | null> {
+  try {
+    const { data } = await api.get<ApiResponse<Partial<KeyBundle>>>(
+      '/users/me/key-bundle',
+    );
+    return data.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function uploadServerBundle(bundle: KeyBundle): Promise<void> {
+  try {
+    await api.post('/users/me/key-bundle', bundle);
+  } catch {
+    /* Non-fatal — next login can re-attempt the upload. */
+  }
+}
+
 export const keyService = {
-  /** Reads the stored private key for this user, generating + uploading a fresh
-   *  pair to the server if one doesn't exist locally yet. Idempotent + safe to
-   *  call on every login / hydrate. Returns the imported CryptoKey or null if
-   *  Web Crypto is unavailable (SSR / older browsers). */
-  async ensureKeyPair(userId: string, serverPublicKey?: string): Promise<CryptoKey | null> {
-    if (typeof window === 'undefined' || !window.crypto?.subtle) return null;
+  /** Called from login / signup. Has the user's password in scope so we can
+   *  decrypt (or, on first run, encrypt + upload) the private-key bundle. */
+  async unlockOrInit(userId: string, password: string): Promise<CryptoKey | null> {
+    if (!hasSubtle()) return null;
     if (cachedPrivate?.userId === userId) return cachedPrivate.key;
 
-    const stored = localStorage.getItem(lsKey(userId));
-    if (stored) {
+    const serverBundle = await fetchServerBundle();
+
+    /* ---- Path 1: server already has a wrapped private key — try to
+                    decrypt it with the password we just received. ---- */
+    if (
+      serverBundle?.encryptedPrivateKey &&
+      serverBundle.keySalt &&
+      serverBundle.keyIv
+    ) {
       try {
-        const key = await importPrivateKey(stored);
-        cachedPrivate = { userId, key };
-        if (!serverPublicKey) {
-          /* Server doesn't know about us yet — re-upload the public half. */
-          await this.uploadFromExisting(userId, stored);
-        }
-        return key;
+        const priv = await unwrapPrivateKey(
+          {
+            encryptedPrivateKey: serverBundle.encryptedPrivateKey,
+            keySalt: serverBundle.keySalt,
+            keyIv: serverBundle.keyIv,
+          },
+          password,
+        );
+        cachedPrivate = { userId, key: priv };
+        const privB64 = await exportPrivateKey(priv);
+        localStorage.setItem(lsKey(userId), privB64);
+        return priv;
       } catch {
-        /* Stored key is corrupt — fall through to regenerate. */
+        /* Wrong password or salt drift — fall through to local fallback so we
+         * don't accidentally clobber an existing local key. */
       }
     }
 
+    /* ---- Path 2: legacy migration — local key exists but server has no
+                    bundle yet. Re-wrap and upload so other devices can sync. ---- */
+    const stored = localStorage.getItem(lsKey(userId));
+    if (stored && serverBundle && !serverBundle.encryptedPrivateKey) {
+      try {
+        const priv = await importPrivateKey(stored);
+        cachedPrivate = { userId, key: priv };
+        if (serverBundle.publicKey) {
+          const wrapped = await wrapPrivateKey(priv, password);
+          await uploadServerBundle({
+            publicKey: serverBundle.publicKey,
+            ...wrapped,
+          });
+        }
+        return priv;
+      } catch {
+        /* Stored key corrupt — fall through to regenerate. */
+      }
+    }
+
+    /* ---- Path 3: brand new (or legacy with no public key on server). Mint
+                    a fresh key pair, wrap, upload, persist locally. ---- */
     const pair = await generateRsaKeyPair();
-    const [pubB64, privB64] = await Promise.all([
+    cachedPrivate = { userId, key: pair.privateKey };
+    const [pubB64, privB64, wrapped] = await Promise.all([
       exportPublicKey(pair.publicKey),
       exportPrivateKey(pair.privateKey),
+      wrapPrivateKey(pair.privateKey, password),
     ]);
     localStorage.setItem(lsKey(userId), privB64);
-    cachedPrivate = { userId, key: pair.privateKey };
-    try {
-      await api.post('/users/me/public-key', { publicKey: pubB64 });
-    } catch {
-      /* Non-fatal — next encrypted message attempt will surface the error. */
-    }
+    await uploadServerBundle({ publicKey: pubB64, ...wrapped });
     return pair.privateKey;
   },
 
-  async uploadFromExisting(_userId: string, privKeyB64: string): Promise<void> {
-    /* We can derive the public key only via a re-import, which is awkward, so
-     * just generate a fresh pair instead — the caller is supposed to wipe the
-     * local key first if they want a refresh. */
-    void privKeyB64;
+  /** Hydrate / refresh path — no password available, so we can only re-use
+   *  whatever's already in localStorage. Never generates new keys here
+   *  (would otherwise overwrite the server bundle and lock the user out
+   *  of every other device). */
+  async ensureKeyPair(userId: string): Promise<CryptoKey | null> {
+    if (!hasSubtle()) return null;
+    if (cachedPrivate?.userId === userId) return cachedPrivate.key;
+    const stored = localStorage.getItem(lsKey(userId));
+    if (!stored) return null;
+    try {
+      const key = await importPrivateKey(stored);
+      cachedPrivate = { userId, key };
+      return key;
+    } catch {
+      return null;
+    }
   },
 
   getPrivateKey(userId: string): CryptoKey | null {

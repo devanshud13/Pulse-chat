@@ -42,6 +42,44 @@ export const setPublicKeyService = async (userId: string, publicKey: string) => 
   return user;
 };
 
+export const setKeyBundleService = async (
+  userId: string,
+  bundle: { publicKey: string; encryptedPrivateKey: string; keySalt: string; keyIv: string },
+) => {
+  const user = await User.findByIdAndUpdate(
+    userId,
+    {
+      publicKey: bundle.publicKey,
+      encryptedPrivateKey: bundle.encryptedPrivateKey,
+      keySalt: bundle.keySalt,
+      keyIv: bundle.keyIv,
+    },
+    { new: true, runValidators: true },
+  );
+  if (!user) throw ApiError.notFound('User not found');
+  return user;
+};
+
+export const getKeyBundleService = async (
+  userId: string,
+): Promise<{
+  publicKey: string;
+  encryptedPrivateKey: string;
+  keySalt: string;
+  keyIv: string;
+}> => {
+  const user = await User.findById(userId).select(
+    '+encryptedPrivateKey +keySalt +keyIv publicKey',
+  );
+  if (!user) throw ApiError.notFound('User not found');
+  return {
+    publicKey: user.publicKey ?? '',
+    encryptedPrivateKey: user.encryptedPrivateKey ?? '',
+    keySalt: user.keySalt ?? '',
+    keyIv: user.keyIv ?? '',
+  };
+};
+
 export const getPublicKeysService = async (
   ids: string[],
 ): Promise<Record<string, string>> => {
