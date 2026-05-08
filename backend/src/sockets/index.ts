@@ -5,6 +5,9 @@ import { verifyAccessToken } from '../utils/jwt';
 import { logger } from '../utils/logger';
 import { setUserStatusService } from '../services/user.service';
 import { registerChatHandlers } from './chat.handlers';
+import { registerCallHandlers } from './call.handlers';
+import { setSocketServer, getSocketServer } from './ioRegistry';
+import { forceEndCallsForUser } from '../services/callSession.service';
 
 export interface AuthedSocket extends Socket {
   data: {
@@ -13,13 +16,22 @@ export interface AuthedSocket extends Socket {
   };
 }
 
-let io: Server | null = null;
+const buildAllowedOrigins = (): string[] => {
+  const list = [env.CLIENT_URL];
+  if (env.EXTENSION_ORIGIN) list.push(env.EXTENSION_ORIGIN);
+  if (env.SOCKET_CORS_ORIGIN) {
+    for (const raw of env.SOCKET_CORS_ORIGIN.split(',')) {
+      const o = raw.trim();
+      if (o) list.push(o);
+    }
+  }
+  return list;
+};
 
 export const initSocket = (httpServer: HttpServer): Server => {
-  const allowedOrigins = [env.CLIENT_URL];
-  if (env.EXTENSION_ORIGIN) allowedOrigins.push(env.EXTENSION_ORIGIN);
+  const allowedOrigins = buildAllowedOrigins();
 
-  io = new Server(httpServer, {
+  const io = new Server(httpServer, {
     cors: {
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);
@@ -34,6 +46,8 @@ export const initSocket = (httpServer: HttpServer): Server => {
     pingTimeout: 60_000,
     pingInterval: 25_000,
   });
+
+  setSocketServer(io);
 
   io.use((socket, next) => {
     try {
@@ -60,8 +74,16 @@ export const initSocket = (httpServer: HttpServer): Server => {
     logger.info(`Socket connected user=${userId} sid=${socket.id}`);
 
     registerChatHandlers(authed);
+    registerCallHandlers(authed);
 
     socket.on('disconnect', async () => {
+      const ended = forceEndCallsForUser(userId);
+      if (ended) {
+        const ioServer = getSocketServer();
+        const payload = { callId: ended.callId, by: userId, reason: 'peer-left' as const };
+        ioServer.to(`user:${ended.callerId}`).emit('call:ended', payload);
+        ioServer.to(`user:${ended.calleeId}`).emit('call:ended', payload);
+      }
       await setUserStatusService(userId, 'offline');
       socket.broadcast.emit('presence:update', {
         userId,
@@ -75,7 +97,4 @@ export const initSocket = (httpServer: HttpServer): Server => {
   return io;
 };
 
-export const getIO = (): Server => {
-  if (!io) throw new Error('Socket.IO not initialized');
-  return io;
-};
+export const getIO = (): Server => getSocketServer();

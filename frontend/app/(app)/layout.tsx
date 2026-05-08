@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
+import { CallRoot } from '@/components/call/CallRoot';
 
 export default function AppLayout({ children }: { children: ReactNode }): JSX.Element {
   const router = useRouter();
@@ -26,5 +27,10 @@ export default function AppLayout({ children }: { children: ReactNode }): JSX.El
   }
 
   if (!user) return <></>;
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <CallRoot />
+    </>
+  );
 }

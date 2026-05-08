@@ -5,6 +5,7 @@ import { tokenStorage } from '@/services/api';
 import { disconnectSocket } from '@/services/socket';
 import { resetChatState } from '@/store/chat.store';
 import { keyService } from '@/services/key.service';
+import { webRtcCallManager } from '@/webrtc/callManager';
 
 interface AuthState {
   user: User | null;
@@ -75,6 +76,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    webRtcCallManager.endCall();
+    webRtcCallManager.unbindSocket();
     try {
       await authService.logout();
     } finally {

@@ -87,6 +87,22 @@ async function connect(token) {
       type: 'OFFSCREEN_STATUS',
     });
   });
+
+  socket.on('call:incoming', (payload) => {
+    chrome.runtime.sendMessage({
+      target: 'background',
+      type: 'OFFSCREEN_CALL_INCOMING',
+      payload,
+    });
+  });
+
+  socket.on('call:timeout', (payload) => {
+    chrome.runtime.sendMessage({
+      target: 'background',
+      type: 'OFFSCREEN_CALL_TIMEOUT',
+      payload,
+    });
+  });
 }
 
 function disconnect() {

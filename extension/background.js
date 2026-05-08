@@ -197,6 +197,48 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         await chrome.tabs.create({ url });
         return sendResponse({ ok: true });
       }
+      case 'OFFSCREEN_CALL_INCOMING': {
+        const p = message.payload || {};
+        if (await isWebsiteTabOpen()) return sendResponse({ ok: true });
+        const id = `pulse-call-${p.callId || Date.now()}`;
+        await chrome.notifications.create(id, {
+          type: 'basic',
+          iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+          title: p.type === 'video' ? 'Incoming video call' : 'Incoming voice call',
+          message: `${p.callerName || 'Someone'} is calling`,
+          priority: 2,
+        });
+        if (p.chatId) await chrome.storage.local.set({ [`notif:${id}`]: p.chatId });
+        await ensureOffscreen();
+        await notifyOffscreen('PLAY_SOUND', {});
+        return sendResponse({ ok: true });
+      }
+      case 'OFFSCREEN_CALL_TIMEOUT': {
+        const p = message.payload || {};
+        if (await isWebsiteTabOpen()) return sendResponse({ ok: true });
+        const id = `pulse-callmiss-${p.callId || Date.now()}`;
+        if (p.role === 'callee') {
+          await chrome.notifications.create(id, {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+            title: 'Missed call',
+            message: `Missed call from ${p.callerName || 'Someone'}`,
+            priority: 1,
+          });
+        } else {
+          await chrome.notifications.create(id, {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+            title: 'No answer',
+            message: 'The other person did not answer',
+            priority: 1,
+          });
+        }
+        if (p.chatId) await chrome.storage.local.set({ [`notif:${id}`]: p.chatId });
+        await ensureOffscreen();
+        await notifyOffscreen('PLAY_SOUND', {});
+        return sendResponse({ ok: true });
+      }
       case 'OFFSCREEN_NOTIFICATION': {
         const payload = message.payload || {};
         await showNotification(payload);

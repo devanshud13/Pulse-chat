@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserAvatar';
 import { useChatStore } from '@/store/chat.store';
 import { formatRelative } from '@/utils/format';
+import { webRtcCallManager } from '@/webrtc/callManager';
 
 interface Props {
   chat: Chat;
@@ -29,6 +30,26 @@ export function ChatHeader({ chat, currentUserId, onToggleInfo, onBack }: Props)
       : presence?.lastSeen
         ? `Last seen ${formatRelative(presence.lastSeen)}`
         : 'Offline';
+
+  const canCall = !chat.isGroup && Boolean(counterpart);
+
+  const startAudio = (): void => {
+    if (!counterpart) return;
+    webRtcCallManager.startOutgoing(chat._id, 'audio', {
+      id: counterpart._id,
+      name: counterpart.name,
+      avatar: counterpart.avatar,
+    });
+  };
+
+  const startVideo = (): void => {
+    if (!counterpart) return;
+    webRtcCallManager.startOutgoing(chat._id, 'video', {
+      id: counterpart._id,
+      name: counterpart.name,
+      avatar: counterpart.avatar,
+    });
+  };
 
   return (
     <div className="flex items-center gap-2 border-b bg-background/70 px-2 py-3 backdrop-blur sm:gap-3 sm:px-4">
@@ -59,10 +80,24 @@ export function ChatHeader({ chat, currentUserId, onToggleInfo, onBack }: Props)
         </div>
         <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
       </div>
-      <Button variant="ghost" size="icon" disabled className="hidden sm:inline-flex">
+      <Button
+        variant="ghost"
+        size="icon"
+        disabled={!canCall}
+        className="inline-flex shrink-0"
+        onClick={startAudio}
+        aria-label="Voice call"
+      >
         <Phone className="h-5 w-5" />
       </Button>
-      <Button variant="ghost" size="icon" disabled className="hidden sm:inline-flex">
+      <Button
+        variant="ghost"
+        size="icon"
+        disabled={!canCall}
+        className="inline-flex shrink-0"
+        onClick={startVideo}
+        aria-label="Video call"
+      >
         <Video className="h-5 w-5" />
       </Button>
       <Button variant="ghost" size="icon" onClick={onToggleInfo} aria-label="Toggle details">

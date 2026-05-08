@@ -12,6 +12,8 @@ interface EnvConfig {
   JWT_REFRESH_EXPIRES_IN: string;
   CLIENT_URL: string;
   EXTENSION_ORIGIN: string;
+  /** Comma-separated extra Socket.IO CORS origins (e.g. preview deploy URLs). */
+  SOCKET_CORS_ORIGIN: string;
   CLOUDINARY_CLOUD_NAME: string;
   CLOUDINARY_API_KEY: string;
   CLOUDINARY_API_SECRET: string;
@@ -42,6 +44,7 @@ export const env: EnvConfig = {
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN ?? '30d',
   CLIENT_URL: process.env.CLIENT_URL as string,
   EXTENSION_ORIGIN: process.env.EXTENSION_ORIGIN ?? '',
+  SOCKET_CORS_ORIGIN: process.env.SOCKET_CORS_ORIGIN ?? '',
   CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? '',
   CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ?? '',
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ?? '',

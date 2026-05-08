@@ -5,6 +5,7 @@ import chatRoutes from './chat.routes';
 import messageRoutes from './message.routes';
 import notificationRoutes from './notification.routes';
 import uploadRoutes from './upload.routes';
+import callRoutes from './call.routes';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/chats', chatRoutes);
 router.use('/messages', messageRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/calls', callRoutes);
 
 export default router;

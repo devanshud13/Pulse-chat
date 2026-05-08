@@ -31,6 +31,8 @@ services:
         sync: false
       - key: EXTENSION_ORIGIN
         sync: false
+      - key: SOCKET_CORS_ORIGIN
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
