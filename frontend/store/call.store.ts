@@ -28,6 +28,12 @@ export interface CallStoreState {
   remoteMuted: boolean;
   remoteCameraOn: boolean;
   remoteSpeaking: boolean;
+  /** True while the peer is sharing their screen. We keep this separate
+   *  from `remoteCameraOn` because they replace the camera track with the
+   *  display track on the same video sender — peer's "camera" is technically
+   *  off but the stream is still valid and should be rendered, not covered
+   *  by the "turned off camera" placeholder. */
+  remoteScreenSharing: boolean;
   networkQuality: NetworkQuality;
   error: string | null;
   durationSec: number;
@@ -64,6 +70,7 @@ interface CallStoreActions {
   setRemoteMuted: (v: boolean) => void;
   setRemoteCameraOn: (v: boolean) => void;
   setRemoteSpeaking: (v: boolean) => void;
+  setRemoteScreenSharing: (v: boolean) => void;
   setNetworkQuality: (q: NetworkQuality) => void;
   setError: (msg: string | null) => void;
   tickDuration: () => void;
@@ -89,6 +96,7 @@ const initial: CallStoreState = {
   remoteMuted: false,
   remoteCameraOn: true,
   remoteSpeaking: false,
+  remoteScreenSharing: false,
   networkQuality: 'unknown',
   error: null,
   durationSec: 0,
@@ -119,6 +127,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
       remoteMuted: false,
       remoteCameraOn: true,
       remoteSpeaking: false,
+      remoteScreenSharing: false,
       networkQuality: 'unknown',
     }),
 
@@ -141,6 +150,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
       remoteMuted: false,
       remoteCameraOn: true,
       remoteSpeaking: false,
+      remoteScreenSharing: false,
       networkQuality: 'unknown',
     }),
 
@@ -155,6 +165,7 @@ export const useCallStore = create<CallStoreState & CallStoreActions>((set) => (
   setRemoteMuted: (v) => set({ remoteMuted: v }),
   setRemoteCameraOn: (v) => set({ remoteCameraOn: v }),
   setRemoteSpeaking: (v) => set({ remoteSpeaking: v }),
+  setRemoteScreenSharing: (v) => set({ remoteScreenSharing: v }),
   setNetworkQuality: (q) => set({ networkQuality: q }),
   setError: (msg) => set({ error: msg }),
   tickDuration: () => set((s) => ({ durationSec: s.durationSec + 1 })),

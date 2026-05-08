@@ -90,6 +90,7 @@ export class WebRtcCallManager {
     socket.on('ice-candidate', this.onIce);
     socket.on('peer-toggle-mic', this.onPeerMic);
     socket.on('peer-toggle-camera', this.onPeerCam);
+    socket.on('peer-toggle-screen', this.onPeerScreen);
   }
 
   unbindSocket(): void {
@@ -108,6 +109,7 @@ export class WebRtcCallManager {
     socket.off('ice-candidate', this.onIce);
     socket.off('peer-toggle-mic', this.onPeerMic);
     socket.off('peer-toggle-camera', this.onPeerCam);
+    socket.off('peer-toggle-screen', this.onPeerScreen);
     this.socketBound = false;
   }
 
@@ -239,6 +241,7 @@ export class WebRtcCallManager {
       const cam = this.localStream?.getVideoTracks()[0];
       const sender = this.pc.getSenders().find((s) => s.track?.kind === 'video');
       if (sender && cam) await sender.replaceTrack(cam);
+      getSocket().emit('toggle-screen', { callId, sharing: false });
       return;
     }
 
@@ -250,6 +253,7 @@ export class WebRtcCallManager {
       const sender = this.pc.getSenders().find((s) => s.track?.kind === 'video');
       if (sender && v) await sender.replaceTrack(v);
       useCallStore.getState().setScreenSharing(true);
+      getSocket().emit('toggle-screen', { callId, sharing: true });
       v.onended = () => {
         void this.toggleScreenShare();
       };
@@ -325,6 +329,11 @@ export class WebRtcCallManager {
   private readonly onPeerCam = (p: { callId: string; enabled: boolean }): void => {
     if (p.callId !== useCallStore.getState().callId) return;
     useCallStore.getState().setRemoteCameraOn(p.enabled);
+  };
+
+  private readonly onPeerScreen = (p: { callId: string; sharing: boolean }): void => {
+    if (p.callId !== useCallStore.getState().callId) return;
+    useCallStore.getState().setRemoteScreenSharing(p.sharing);
   };
 
   private readonly onOffer = async (p: { callId: string; sdp: WireSdp }): Promise<void> => {

@@ -191,4 +191,16 @@ export const registerCallHandlers = (socket: AuthedSocket): void => {
       enabled: p.enabled,
     });
   });
+
+  socket.on('toggle-screen', (p: { callId?: string; sharing?: boolean }) => {
+    if (!p?.callId || typeof p.sharing !== 'boolean') return;
+    const s = getSession(p.callId);
+    if (!s) return;
+    if (userId !== s.callerId && userId !== s.calleeId) return;
+    const peerId = userId === s.callerId ? s.calleeId : s.callerId;
+    io.to(`user:${peerId}`).emit('peer-toggle-screen', {
+      callId: p.callId,
+      sharing: p.sharing,
+    });
+  });
 };

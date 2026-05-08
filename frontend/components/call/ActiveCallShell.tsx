@@ -56,6 +56,7 @@ export function ActiveCallShell({ phase }: ShellProps): JSX.Element {
   const remoteMuted = useCallStore((s) => s.remoteMuted);
   const remoteCameraOn = useCallStore((s) => s.remoteCameraOn);
   const remoteSpeaking = useCallStore((s) => s.remoteSpeaking);
+  const remoteScreenSharing = useCallStore((s) => s.remoteScreenSharing);
   const networkQuality = useCallStore((s) => s.networkQuality);
   const durationSec = useCallStore((s) => s.durationSec);
 
@@ -214,7 +215,7 @@ export function ActiveCallShell({ phase }: ShellProps): JSX.Element {
         </div>
       </header>
 
-      <div className="relative flex min-h-0 flex-1 flex-col p-4 md:flex-row md:gap-4">
+      <div className="relative flex min-h-0 flex-1 p-4">
         <div
           className={cn(
             'relative min-h-[40vh] flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/50 shadow-inner md:min-h-0',
@@ -234,7 +235,10 @@ export function ActiveCallShell({ phase }: ShellProps): JSX.Element {
                 className="h-full min-h-[280px] w-full md:min-h-0"
                 label={peerName}
               />
-              {!remoteCameraOn && (
+              {/* Camera-off overlay only when peer is *not* screen sharing — if
+                  they're sharing, the screen frames travel on the same video
+                  track and we should keep showing them. */}
+              {!remoteCameraOn && !remoteScreenSharing && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/70">
                   <VideoOffPlaceholder name={peerName} />
                 </div>
@@ -244,15 +248,27 @@ export function ActiveCallShell({ phase }: ShellProps): JSX.Element {
         </div>
 
         {!audioOnly && (
+          /* Floating PIP — draggable, sized to its content (aspect-video).
+             Keeping it absolute on every breakpoint avoids the long empty
+             column we used to get on desktop where the wrapper stretched
+             to row height while the inner video stayed 16:9. */
           <motion.div
             drag
             dragMomentum={false}
-            dragConstraints={{ left: -200, right: 200, top: -120, bottom: 120 }}
-            className="absolute bottom-24 right-6 z-10 w-36 overflow-hidden rounded-xl border-2 border-white/20 shadow-2xl md:relative md:bottom-auto md:right-auto md:w-52 md:shrink-0"
+            dragElastic={0.15}
+            dragConstraints={shellRef}
+            className="absolute bottom-24 right-6 z-20 w-40 cursor-grab overflow-hidden rounded-xl border-2 border-white/20 bg-black/60 shadow-2xl active:cursor-grabbing md:bottom-6 md:right-6 md:w-56"
           >
             <ParticipantVideo stream={localStream} muted mirror className="aspect-video w-full" label="You" />
-            {!cameraOn && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-xs">Camera off</div>
+            {!cameraOn && !screenSharing && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-xs">
+                Camera off
+              </div>
+            )}
+            {screenSharing && (
+              <div className="absolute left-1 top-1 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-medium">
+                Sharing
+              </div>
             )}
           </motion.div>
         )}
