@@ -3,7 +3,8 @@ import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { sendMessageSchema } from '../validators/chat';
 import {
-  deleteMessage,
+  deleteForEveryone,
+  deleteForMe,
   listMessages,
   markRead,
   sendMessage,
@@ -18,6 +19,9 @@ router.post('/', validate(sendMessageSchema), sendMessage);
 router.get('/unread/total', totalUnread);
 router.get('/:chatId', listMessages);
 router.post('/:chatId/read', markRead);
-router.delete('/:id', deleteMessage);
+router.delete('/:id/me', deleteForMe);
+router.delete('/:id/everyone', deleteForEveryone);
+/** Legacy: maps to delete-for-everyone for backward compatibility. */
+router.delete('/:id', deleteForEveryone);
 
 export default router;

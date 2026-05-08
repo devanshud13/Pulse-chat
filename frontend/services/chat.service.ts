@@ -66,6 +66,11 @@ export const messageService = {
     content?: string;
     type?: 'text' | 'image' | 'file';
     attachment?: { url: string; publicId?: string; name: string; size: number; mime: string };
+    encryption?: {
+      enabled: boolean;
+      iv?: string;
+      keys: { user: string; key: string }[];
+    };
   }): Promise<Message> {
     const { data } = await api.post<ApiResponse<Message>>('/messages', payload);
     return data.data;
@@ -77,8 +82,12 @@ export const messageService = {
     const { data } = await api.get<ApiResponse<{ count: number }>>('/messages/unread/total');
     return data.data.count;
   },
-  async remove(messageId: string): Promise<Message> {
-    const { data } = await api.delete<ApiResponse<Message>>(`/messages/${messageId}`);
+  async deleteForMe(messageId: string): Promise<Message> {
+    const { data } = await api.delete<ApiResponse<Message>>(`/messages/${messageId}/me`);
+    return data.data;
+  },
+  async deleteForEveryone(messageId: string): Promise<Message> {
+    const { data } = await api.delete<ApiResponse<Message>>(`/messages/${messageId}/everyone`);
     return data.data;
   },
 };

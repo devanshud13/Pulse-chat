@@ -6,6 +6,8 @@ export interface User {
   bio?: string;
   status: 'online' | 'offline';
   lastSeen?: string;
+  /** Base64 SPKI of the user's RSA-OAEP public key (E2E). */
+  publicKey?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -16,6 +18,17 @@ export interface Attachment {
   name: string;
   size: number;
   mime: string;
+}
+
+export interface MessageEncryptionKey {
+  user: string;
+  key: string;
+}
+
+export interface MessageEncryption {
+  enabled: boolean;
+  iv?: string;
+  keys: MessageEncryptionKey[];
 }
 
 export interface Message {
@@ -29,8 +42,16 @@ export interface Message {
   deliveredTo: string[];
   edited: boolean;
   deleted: boolean;
+  deletedFor?: string[];
+  encryption?: MessageEncryption;
   createdAt: string;
   updatedAt: string;
+  /** Client-side only — `true` while the message is being sent (no server _id yet). */
+  pending?: boolean;
+  /** Client-side only — `true` if the API call failed; UI lets the user retry. */
+  failed?: boolean;
+  /** Client-side only — cached plaintext after decryption to avoid re-decrypt on every render. */
+  plaintext?: string;
 }
 
 export interface Chat {

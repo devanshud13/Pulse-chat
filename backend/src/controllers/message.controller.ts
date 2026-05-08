@@ -3,12 +3,17 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AuthenticatedRequest } from '../types';
 import {
   createMessageService,
-  deleteMessageService,
+  deleteForEveryoneService,
+  deleteForMeService,
   listMessagesService,
   markChatReadService,
   totalUnreadService,
 } from '../services/message.service';
-import { broadcastNewMessage, broadcastReadReceipt } from '../sockets/emitters';
+import {
+  broadcastMessageDeleted,
+  broadcastNewMessage,
+  broadcastReadReceipt,
+} from '../sockets/emitters';
 
 export const sendMessage = asyncHandler(async (req, res: Response) => {
   const me = (req as AuthenticatedRequest).user!.userId;
@@ -18,6 +23,7 @@ export const sendMessage = asyncHandler(async (req, res: Response) => {
     content: req.body.content,
     type: req.body.type,
     attachment: req.body.attachment,
+    encryption: req.body.encryption,
   });
   await broadcastNewMessage(message);
   res.status(201).json({ success: true, data: message });
@@ -44,8 +50,15 @@ export const totalUnread = asyncHandler(async (req, res: Response) => {
   res.json({ success: true, data: { count } });
 });
 
-export const deleteMessage = asyncHandler(async (req, res: Response) => {
+export const deleteForMe = asyncHandler(async (req, res: Response) => {
   const me = (req as AuthenticatedRequest).user!.userId;
-  const message = await deleteMessageService(req.params.id, me);
+  const message = await deleteForMeService(req.params.id, me);
+  res.json({ success: true, data: message });
+});
+
+export const deleteForEveryone = asyncHandler(async (req, res: Response) => {
+  const me = (req as AuthenticatedRequest).user!.userId;
+  const message = await deleteForEveryoneService(req.params.id, me);
+  broadcastMessageDeleted(message);
   res.json({ success: true, data: message });
 });

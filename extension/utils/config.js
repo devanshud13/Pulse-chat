@@ -3,9 +3,9 @@
  * or override at runtime via chrome.storage.local (`api_url`, `socket_url`, `frontend_url`).
  */
 export const DEFAULTS = Object.freeze({
-  API_URL: 'http://localhost:5000/api/v1',
-  SOCKET_URL: 'http://localhost:5000',
-  FRONTEND_URL: 'http://localhost:3000',
+  API_URL: 'https://pulse-chat-backend-k1do.onrender.com/api/v1',
+  SOCKET_URL: 'https://pulse-chat-backend-k1do.onrender.com',
+  FRONTEND_URL: 'https://pulse-chat-iota.vercel.app',
 });
 
 const KEYS = ['api_url', 'socket_url', 'frontend_url'];

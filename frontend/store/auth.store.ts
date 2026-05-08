@@ -4,6 +4,7 @@ import { authService } from '@/services/auth.service';
 import { tokenStorage } from '@/services/api';
 import { disconnectSocket } from '@/services/socket';
 import { resetChatState } from '@/store/chat.store';
+import { keyService } from '@/services/key.service';
 
 interface AuthState {
   user: User | null;
@@ -34,6 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const user = await authService.me();
       set({ user });
+      void keyService.ensureKeyPair(user._id, user.publicKey);
     } catch {
       resetChatState();
       set({ user: null });
@@ -49,6 +51,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authService.login({ email, password });
       resetChatState();
       set({ user: res.user });
+      void keyService.ensureKeyPair(res.user._id, res.user.publicKey);
     } finally {
       set({ loading: false });
     }
@@ -60,6 +63,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authService.signup({ name, email, password });
       resetChatState();
       set({ user: res.user });
+      void keyService.ensureKeyPair(res.user._id, res.user.publicKey);
     } finally {
       set({ loading: false });
     }
@@ -71,6 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } finally {
       disconnectSocket();
       resetChatState();
+      keyService.clear();
       set({ user: null });
     }
   },

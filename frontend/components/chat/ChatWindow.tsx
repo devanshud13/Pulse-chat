@@ -15,12 +15,15 @@ import { MessageComposer } from './MessageComposer';
 import { TypingIndicator } from './TypingIndicator';
 import { formatDate } from '@/utils/format';
 import { EMPTY_MESSAGES, EMPTY_STRING_ARRAY } from '@/constants/empty';
+import { useDecryptedMessages } from '@/hooks/useDecryptedMessages';
 
 interface Props {
   chat: Chat;
+  /** When provided, renders a back arrow in the header to return to the chat list (mobile UX). */
+  onBack?: () => void;
 }
 
-export function ChatWindow({ chat }: Props): JSX.Element {
+export function ChatWindow({ chat, onBack }: Props): JSX.Element {
   const user = useAuthStore((s) => s.user);
   const rawMessages = useChatStore((s) => s.messagesByChat[chat._id]);
   const messages = rawMessages === undefined ? EMPTY_MESSAGES : rawMessages;
@@ -130,6 +133,8 @@ export function ChatWindow({ chat }: Props): JSX.Element {
       .map((m) => m.name);
   }, [typingIds, chat.members, user?._id]);
 
+  useDecryptedMessages(chat._id, messages, user?._id ?? null);
+
   const grouped = useMemo(() => {
     const out: { date: string; messages: Message[] }[] = [];
     for (const m of messages) {
@@ -148,6 +153,7 @@ export function ChatWindow({ chat }: Props): JSX.Element {
           chat={chat}
           currentUserId={user?._id ?? ''}
           onToggleInfo={() => setShowInfo((s) => !s)}
+          onBack={onBack}
         />
         <div
           ref={scrollRef}
@@ -204,7 +210,7 @@ export function ChatWindow({ chat }: Props): JSX.Element {
           ))}
         </div>
         <TypingIndicator names={typingNames} />
-        <MessageComposer chatId={chat._id} />
+        <MessageComposer chat={chat} />
       </div>
       {showInfo && <ChatInfoPanel chat={chat} currentUserId={user?._id ?? ''} />}
     </div>

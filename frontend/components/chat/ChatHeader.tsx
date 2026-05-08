@@ -1,6 +1,6 @@
 'use client';
 
-import { Info, Phone, Video } from 'lucide-react';
+import { ArrowLeft, Info, Lock, Phone, Video } from 'lucide-react';
 import type { Chat, User } from '@/types';
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from './UserAvatar';
@@ -11,9 +11,11 @@ interface Props {
   chat: Chat;
   currentUserId: string;
   onToggleInfo: () => void;
+  /** Mobile-only: shows a back arrow to return to the chat list. */
+  onBack?: () => void;
 }
 
-export function ChatHeader({ chat, currentUserId, onToggleInfo }: Props): JSX.Element {
+export function ChatHeader({ chat, currentUserId, onToggleInfo, onBack }: Props): JSX.Element {
   const counterpart: User | undefined = chat.isGroup
     ? undefined
     : chat.members.find((m) => m._id !== currentUserId);
@@ -29,7 +31,18 @@ export function ChatHeader({ chat, currentUserId, onToggleInfo }: Props): JSX.El
         : 'Offline';
 
   return (
-    <div className="flex items-center gap-3 border-b bg-background/70 px-4 py-3 backdrop-blur">
+    <div className="flex items-center gap-2 border-b bg-background/70 px-2 py-3 backdrop-blur sm:gap-3 sm:px-4">
+      {onBack && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Back to chats"
+          onClick={onBack}
+          className="md:hidden"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+      )}
       <UserAvatar
         userId={counterpart?._id}
         name={title}
@@ -37,13 +50,19 @@ export function ChatHeader({ chat, currentUserId, onToggleInfo }: Props): JSX.El
         showStatus={!chat.isGroup}
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold">{title}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-semibold">{title}</span>
+          <Lock
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-label="End-to-end encrypted"
+          />
+        </div>
         <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
       </div>
-      <Button variant="ghost" size="icon" disabled>
+      <Button variant="ghost" size="icon" disabled className="hidden sm:inline-flex">
         <Phone className="h-5 w-5" />
       </Button>
-      <Button variant="ghost" size="icon" disabled>
+      <Button variant="ghost" size="icon" disabled className="hidden sm:inline-flex">
         <Video className="h-5 w-5" />
       </Button>
       <Button variant="ghost" size="icon" onClick={onToggleInfo} aria-label="Toggle details">

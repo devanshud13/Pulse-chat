@@ -1,8 +1,19 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { searchUsersSchema, updateProfileSchema } from '../validators/user';
-import { getMe, searchUsers, updateProfile } from '../controllers/user.controller';
+import {
+  publicKeyQuerySchema,
+  searchUsersSchema,
+  setPublicKeySchema,
+  updateProfileSchema,
+} from '../validators/user';
+import {
+  getMe,
+  getPublicKeys,
+  searchUsers,
+  setPublicKey,
+  updateProfile,
+} from '../controllers/user.controller';
 
 const router = Router();
 
@@ -10,6 +21,8 @@ router.use(authenticate);
 
 router.get('/me', getMe);
 router.patch('/me', validate(updateProfileSchema), updateProfile);
+router.post('/me/public-key', validate(setPublicKeySchema), setPublicKey);
+router.get('/public-keys', validate(publicKeyQuerySchema, 'query'), getPublicKeys);
 router.get('/search', validate(searchUsersSchema, 'query'), searchUsers);
 
 export default router;

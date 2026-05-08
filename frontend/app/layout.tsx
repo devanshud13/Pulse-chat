@@ -6,7 +6,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
-  title: 'Pulse — Realtime Chat',
+  title: 'Pulse-Web',
   description:
     'Modern, secure, realtime team chat with groups, file sharing, and a Chrome notification extension.',
 };

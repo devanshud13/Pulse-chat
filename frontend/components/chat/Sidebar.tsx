@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import axios from 'axios';
-import { Bell, LogOut, MessageCircle, Moon, Plus, Search, Settings, Sun, User as UserIcon } from 'lucide-react';
+import { LogOut, Moon, Plus, Search, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import type { Chat, User } from '@/types';
@@ -143,12 +144,17 @@ export function Sidebar({ selectedId, onSelect }: Props): JSX.Element {
   };
 
   return (
-    <aside className="flex h-full w-full flex-col border-r bg-card/30 sm:w-[340px]">
+    <aside className="flex h-full w-full flex-col bg-card/30">
       <div className="flex items-center justify-between gap-2 px-4 py-3">
         <Link href="/chat" className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary/15 text-primary">
-            <MessageCircle className="h-4 w-4" />
-          </div>
+          <Image
+            src="/icons/chat.png"
+            alt="Pulse"
+            width={32}
+            height={32}
+            priority
+            className="h-8 w-8 rounded-lg object-contain"
+          />
           <span className="text-base font-bold gradient-text">Pulse</span>
         </Link>
         <div className="flex items-center gap-1">
@@ -180,13 +186,34 @@ export function Sidebar({ selectedId, onSelect }: Props): JSX.Element {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onSelect={() => router.push('/profile')}>
-                <UserIcon className="mr-2 h-4 w-4" /> Profile
+                <Image
+                  src="/icons/people.png"
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="mr-2 h-5 w-5 object-contain"
+                />
+                Profile
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/notifications')}>
-                <Bell className="mr-2 h-4 w-4" /> Notifications
+                <Image
+                  src="/icons/bell.png"
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="mr-2 h-5 w-5 object-contain"
+                />
+                Notifications
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/settings')}>
-                <Settings className="mr-2 h-4 w-4" /> Settings
+                <Image
+                  src="/icons/gear.png"
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="mr-2 h-5 w-5 object-contain"
+                />
+                Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void onLogout()}>

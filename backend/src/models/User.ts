@@ -11,6 +11,8 @@ export interface IUser extends Document {
   status: 'online' | 'offline';
   lastSeen: Date;
   refreshTokens: string[];
+  /** Base64-encoded SPKI of the user's RSA-OAEP-2048 public key (used for E2E). */
+  publicKey?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidate: string): Promise<boolean>;
@@ -34,6 +36,7 @@ const userSchema = new Schema<IUser>(
     status: { type: String, enum: ['online', 'offline'], default: 'offline' },
     lastSeen: { type: Date, default: Date.now },
     refreshTokens: { type: [String], default: [], select: false },
+    publicKey: { type: String, default: '' },
   },
   { timestamps: true },
 );

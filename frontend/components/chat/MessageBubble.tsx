@@ -1,10 +1,31 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, CheckCheck, Download, FileIcon } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  CheckCheck,
+  Clock,
+  Download,
+  FileIcon,
+  MoreVertical,
+  Trash2,
+  UserMinus,
+} from 'lucide-react';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import type { Message, User } from '@/types';
 import { UserAvatar } from './UserAvatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { messageService } from '@/services/chat.service';
+import { useChatStore } from '@/store/chat.store';
 import { cn } from '@/utils/cn';
 import { formatBytes, formatTime } from '@/utils/format';
 
@@ -29,22 +50,67 @@ export function MessageBubble({
   const readByOthers = message.readBy.filter((id) => id !== currentUserId).length;
   const allRead = readByOthers >= Math.max(0, membersCount - 1) && membersCount > 1;
 
+  const removeMessage = useChatStore((s) => s.removeMessage);
+  const markMessageDeleted = useChatStore((s) => s.markMessageDeleted);
+
+  const [busy, setBusy] = useState(false);
+
+  const onDeleteForMe = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await messageService.deleteForMe(message._id);
+      removeMessage(message.chat, message._id);
+    } catch {
+      toast.error('Could not delete the message');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDeleteForEveryone = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await messageService.deleteForEveryone(message._id);
+      markMessageDeleted(message.chat, message._id);
+    } catch {
+      toast.error('Could not delete the message');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (message.deleted) {
     return (
       <div className={cn('flex w-full px-2', mine ? 'justify-end' : 'justify-start')}>
         <div className="rounded-2xl border border-dashed bg-muted/30 px-4 py-2 text-xs italic text-muted-foreground">
-          Message deleted
+          {mine ? 'You deleted this message' : 'This message was deleted'}
         </div>
       </div>
     );
   }
+
+  /* Display body: prefer cached `plaintext` when the wire payload was
+     encrypted; otherwise fall back to `content` directly. */
+  const body =
+    message.encryption?.enabled && message.plaintext === undefined
+      ? '🔒 Decrypting…'
+      : message.plaintext ?? message.content;
+
+  const isOptimistic = Boolean(message.pending);
+  const failed = Boolean(message.failed);
+  const canDeleteForEveryone = mine && !isOptimistic && !failed;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className={cn('flex w-full items-end gap-2 px-2', mine ? 'justify-end' : 'justify-start')}
+      className={cn(
+        'group/msg flex w-full items-end gap-2 px-2',
+        mine ? 'justify-end' : 'justify-start',
+      )}
     >
       {!mine && (
         <div className={cn('w-8', !showAvatar && 'invisible')}>
@@ -53,7 +119,12 @@ export function MessageBubble({
           )}
         </div>
       )}
-      <div className={cn('max-w-[78%] sm:max-w-[60%]', mine ? 'items-end' : 'items-start')}>
+      <div
+        className={cn(
+          'relative flex max-w-[78%] flex-col sm:max-w-[60%]',
+          mine ? 'items-end' : 'items-start',
+        )}
+      >
         {!mine && isGroup && showAvatar && (
           <div className="mb-0.5 ml-1 text-[11px] font-medium text-primary/90">
             {sender?.name ?? 'User'}
@@ -61,14 +132,71 @@ export function MessageBubble({
         )}
         <div
           className={cn(
-            'group rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm transition-shadow hover:shadow-md',
+            'group relative rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm transition-shadow hover:shadow-md',
             mine
               ? 'rounded-br-sm bg-primary text-primary-foreground'
               : 'rounded-bl-sm bg-muted text-foreground',
+            isOptimistic && 'opacity-80',
+            failed && 'ring-1 ring-destructive/60',
           )}
         >
+          {!isOptimistic && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Message actions"
+                  className={cn(
+                    'absolute -top-2 z-10 grid h-6 w-6 place-items-center rounded-full border bg-background text-foreground/80 opacity-0 shadow-md outline-none transition-opacity',
+                    'hover:opacity-100 focus-visible:opacity-100 group-hover/msg:opacity-100',
+                    'data-[state=open]:opacity-100 sm:group-hover/msg:opacity-100',
+                    mine ? '-right-2' : '-right-2',
+                  )}
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align={mine ? 'end' : 'start'}
+                className="w-52"
+                sideOffset={6}
+              >
+                <DropdownMenuItem
+                  disabled={busy}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    void onDeleteForMe();
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <UserMinus className="mr-2 h-4 w-4" /> Delete for me
+                </DropdownMenuItem>
+                {canDeleteForEveryone && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={busy}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        void onDeleteForEveryone();
+                      }}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete for everyone
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           {message.type === 'image' && message.attachment && (
-            <a href={message.attachment.url} target="_blank" rel="noopener noreferrer" className="block">
+            <a
+              href={message.attachment.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block"
+            >
               <Image
                 src={message.attachment.url}
                 alt={message.attachment.name}
@@ -97,7 +225,7 @@ export function MessageBubble({
               <Download className="h-4 w-4 opacity-70" />
             </a>
           )}
-          {message.content && <div className="whitespace-pre-wrap break-words">{message.content}</div>}
+          {body && <div className="whitespace-pre-wrap break-words">{body}</div>}
           <div
             className={cn(
               'mt-1 flex items-center justify-end gap-1 text-[10px]',
@@ -105,9 +233,27 @@ export function MessageBubble({
             )}
           >
             <span>{formatTime(message.createdAt)}</span>
-            {mine && (allRead ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />)}
+            {mine &&
+              (failed ? (
+                <AlertCircle className="h-3 w-3 text-destructive" />
+              ) : isOptimistic ? (
+                <Clock className="h-3 w-3" />
+              ) : allRead ? (
+                <CheckCheck className="h-3 w-3" />
+              ) : (
+                <Check className="h-3 w-3" />
+              ))}
           </div>
         </div>
+        {failed && mine && (
+          <button
+            type="button"
+            onClick={() => removeMessage(message.chat, message._id)}
+            className="mt-1 text-[10px] text-destructive hover:underline"
+          >
+            Failed to send · tap to dismiss
+          </button>
+        )}
       </div>
     </motion.div>
   );

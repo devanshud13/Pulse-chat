@@ -24,7 +24,7 @@ export const memberActionSchema = z.object({
 
 export const sendMessageSchema = z.object({
   chatId: objectId,
-  content: z.string().max(5000).optional().default(''),
+  content: z.string().max(20000).optional().default(''),
   type: z.enum(['text', 'image', 'file']).optional().default('text'),
   attachment: z
     .object({
@@ -33,6 +33,20 @@ export const sendMessageSchema = z.object({
       name: z.string(),
       size: z.number().int().nonnegative(),
       mime: z.string(),
+    })
+    .optional(),
+  encryption: z
+    .object({
+      enabled: z.boolean(),
+      iv: z.string().optional(),
+      keys: z
+        .array(
+          z.object({
+            user: objectId,
+            key: z.string(),
+          }),
+        )
+        .default([]),
     })
     .optional(),
 });

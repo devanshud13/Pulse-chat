@@ -31,3 +31,26 @@ export const setUserStatusService = async (
 ): Promise<void> => {
   await User.findByIdAndUpdate(userId, { status, lastSeen: new Date() });
 };
+
+export const setPublicKeyService = async (userId: string, publicKey: string) => {
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { publicKey },
+    { new: true, runValidators: true },
+  );
+  if (!user) throw ApiError.notFound('User not found');
+  return user;
+};
+
+export const getPublicKeysService = async (
+  ids: string[],
+): Promise<Record<string, string>> => {
+  const valid = ids.filter((id) => /^[0-9a-fA-F]{24}$/.test(id));
+  if (valid.length === 0) return {};
+  const users = await User.find({ _id: { $in: valid } }).select('_id publicKey');
+  const out: Record<string, string> = {};
+  for (const u of users) {
+    if (u.publicKey) out[u._id.toString()] = u.publicKey;
+  }
+  return out;
+};

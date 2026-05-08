@@ -61,11 +61,15 @@ export const useSocketEvents = (
     const onRead = (p: { chatId: string; userId: string }): void => {
       useChatStore.getState().markChatRead(p.chatId, p.userId);
     };
+    const onDelete = (p: { _id: string; chat: string }): void => {
+      useChatStore.getState().markMessageDeleted(p.chat, p._id);
+    };
     const onNotify = (p: NotificationPayload): void => {
       notifRef.current?.(p);
     };
 
     socket.on('message:new', onMessage);
+    socket.on('message:delete', onDelete);
     socket.on('typing:start', onTypingStart);
     socket.on('typing:stop', onTypingStop);
     socket.on('presence:update', onPresence);
@@ -74,6 +78,7 @@ export const useSocketEvents = (
 
     return () => {
       socket.off('message:new', onMessage);
+      socket.off('message:delete', onDelete);
       socket.off('typing:start', onTypingStart);
       socket.off('typing:stop', onTypingStop);
       socket.off('presence:update', onPresence);

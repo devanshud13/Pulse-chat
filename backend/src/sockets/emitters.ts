@@ -68,3 +68,22 @@ export const broadcastReadReceipt = (chatId: string, readerId: string): void => 
     logger.error('broadcastReadReceipt error', err);
   }
 };
+
+export const broadcastMessageDeleted = async (message: IMessage): Promise<void> => {
+  try {
+    const io = getIO();
+    const chat = await Chat.findById(message.chat).select('members');
+    if (!chat) return;
+    const payload = {
+      _id: message._id.toString(),
+      chat: message.chat.toString(),
+      deleted: true,
+    };
+    io.to(`chat:${message.chat.toString()}`).emit('message:delete', payload);
+    for (const memberId of chat.members) {
+      io.to(`user:${memberId.toString()}`).emit('message:delete', payload);
+    }
+  } catch (err) {
+    logger.error('broadcastMessageDeleted error', err);
+  }
+};

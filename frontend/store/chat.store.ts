@@ -20,7 +20,13 @@ interface ChatState {
   setMessages: (chatId: string, messages: Message[]) => void;
   prependMessages: (chatId: string, messages: Message[]) => void;
   appendMessage: (chatId: string, message: Message) => void;
+  /** Replaces a temporary (`tempId`) optimistic message with the server copy. */
+  replaceMessage: (chatId: string, tempId: string, real: Message) => void;
+  /** Updates flags on a pending optimistic message (e.g. mark `failed: true`). */
+  updateMessage: (chatId: string, messageId: string, patch: Partial<Message>) => void;
   removeMessage: (chatId: string, messageId: string) => void;
+  /** Marks a message tombstoned across all chat panes (used by `message:delete`). */
+  markMessageDeleted: (chatId: string, messageId: string) => void;
   markChatRead: (chatId: string, userId: string) => void;
 
   setTyping: (chatId: string, userId: string, typing: boolean) => void;
@@ -96,6 +102,32 @@ export const useChatStore = create<ChatState>((set) => ({
         chats,
       };
     }),
+  replaceMessage: (chatId, tempId, real) =>
+    set((state) => {
+      const list = state.messagesByChat[chatId];
+      if (!list) return {};
+      const idx = list.findIndex((m) => m._id === tempId);
+      if (idx === -1) return {};
+      const next = list.slice();
+      next[idx] = real;
+      const chats = state.chats.map((c) =>
+        c._id === chatId ? { ...c, lastMessage: real, updatedAt: real.createdAt } : c,
+      );
+      return {
+        messagesByChat: { ...state.messagesByChat, [chatId]: next },
+        chats,
+      };
+    }),
+  updateMessage: (chatId, messageId, patch) =>
+    set((state) => {
+      const list = state.messagesByChat[chatId];
+      if (!list) return {};
+      const idx = list.findIndex((m) => m._id === messageId);
+      if (idx === -1) return {};
+      const next = list.slice();
+      next[idx] = { ...next[idx], ...patch };
+      return { messagesByChat: { ...state.messagesByChat, [chatId]: next } };
+    }),
   removeMessage: (chatId, messageId) =>
     set((state) => ({
       messagesByChat: {
@@ -103,6 +135,30 @@ export const useChatStore = create<ChatState>((set) => ({
         [chatId]: (state.messagesByChat[chatId] ?? []).filter((m) => m._id !== messageId),
       },
     })),
+  markMessageDeleted: (chatId, messageId) =>
+    set((state) => {
+      const list = state.messagesByChat[chatId];
+      if (!list) return {};
+      const idx = list.findIndex((m) => m._id === messageId);
+      if (idx === -1) return {};
+      const tomb: Message = {
+        ...list[idx],
+        deleted: true,
+        content: '',
+        attachment: undefined,
+        plaintext: undefined,
+        encryption: { enabled: false, keys: [] },
+      };
+      const next = list.slice();
+      next[idx] = tomb;
+      const chats = state.chats.map((c) =>
+        c._id === chatId && c.lastMessage?._id === messageId ? { ...c, lastMessage: tomb } : c,
+      );
+      return {
+        messagesByChat: { ...state.messagesByChat, [chatId]: next },
+        chats,
+      };
+    }),
   markChatRead: (chatId, userId) =>
     set((state) => {
       const list = state.messagesByChat[chatId];

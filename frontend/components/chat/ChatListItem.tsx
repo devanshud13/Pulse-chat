@@ -21,13 +21,16 @@ export function ChatListItem({ chat, currentUserId, active, unread, onClick }: P
     : chat.members.find((m) => m._id !== currentUserId);
 
   const title = chat.isGroup ? chat.name ?? 'Group' : counterpart?.name ?? 'Direct';
-  const subtitle = chat.lastMessage?.deleted
+  const last = chat.lastMessage;
+  const subtitle = last?.deleted
     ? 'Message deleted'
-    : chat.lastMessage?.type === 'image'
-      ? 'Photo'
-      : chat.lastMessage?.type === 'file'
-        ? 'File'
-        : chat.lastMessage?.content || 'Say hi 👋';
+    : last?.type === 'image'
+      ? '📷 Photo'
+      : last?.type === 'file'
+        ? '📎 File'
+        : last?.encryption?.enabled
+          ? last.plaintext ?? '🔒 Encrypted message'
+          : last?.content || 'Say hi 👋';
 
   return (
     <motion.button

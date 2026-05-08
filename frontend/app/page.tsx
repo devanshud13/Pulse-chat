@@ -1,28 +1,39 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, MessageCircle, ShieldCheck, Sparkles, Zap, Users, Bell } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const features = [
+interface Feature {
+  /** Lucide icon component (rendered with feature accent color). */
+  lucide?: React.ComponentType<{ className?: string }>;
+  /** Path to a 3D PNG icon under /public — takes precedence over `lucide`. */
+  image?: string;
+  title: string;
+  description: string;
+}
+
+const features: Feature[] = [
   {
-    icon: Zap,
+    lucide: Zap,
     title: 'Realtime Sync',
     description: 'Sub-second delivery powered by Socket.IO with auto-reconnect and read receipts.',
   },
   {
-    icon: ShieldCheck,
-    title: 'End-to-end Secure',
-    description: 'JWT auth, refresh-token rotation, rate limiting, and hardened HTTP headers.',
+    lucide: ShieldCheck,
+    title: 'End-to-end Encrypted',
+    description:
+      'RSA-OAEP + AES-GCM keypairs generated in your browser. The server never sees plaintext.',
   },
   {
-    icon: Users,
+    image: '/icons/people.png',
     title: 'Groups & DMs',
     description: 'Create groups, manage members, share files — built for teams of any size.',
   },
   {
-    icon: Bell,
+    image: '/icons/bell.png',
     title: 'Browser Extension',
     description: 'Native Chrome notifications even when the tab is closed. Never miss a message.',
   },
@@ -33,9 +44,14 @@ export default function LandingPage(): JSX.Element {
     <main className="relative isolate min-h-screen overflow-hidden gradient-bg">
       <nav className="container flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary">
-            <MessageCircle className="h-5 w-5" />
-          </div>
+          <Image
+            src="/icons/chat.png"
+            alt="Pulse"
+            width={36}
+            height={36}
+            priority
+            className="h-9 w-9 rounded-xl object-contain drop-shadow-md"
+          />
           <span className="text-lg font-bold tracking-tight gradient-text">Pulse</span>
         </Link>
         <div className="flex items-center gap-2">
@@ -148,23 +164,38 @@ export default function LandingPage(): JSX.Element {
           Every detail, from architecture to animation, optimized for production.
         </p>
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {features.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-50px' }}
-              transition={{ delay: i * 0.08 }}
-              whileHover={{ y: -4 }}
-              className="group relative rounded-2xl border bg-card/30 p-6 backdrop-blur transition-colors hover:border-primary/40"
-            >
-              <div className="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-primary/15 text-primary transition-transform group-hover:scale-110">
-                <f.icon className="h-5 w-5" />
-              </div>
-              <h3 className="text-base font-semibold">{f.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{f.description}</p>
-            </motion.div>
-          ))}
+          {features.map((f, i) => {
+            const LucideIcon = f.lucide;
+            return (
+              <motion.div
+                key={f.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ delay: i * 0.08 }}
+                whileHover={{ y: -4 }}
+                className="group relative rounded-2xl border bg-card/30 p-6 backdrop-blur transition-colors hover:border-primary/40"
+              >
+                <div className="mb-4 transition-transform group-hover:scale-110">
+                  {f.image ? (
+                    <Image
+                      src={f.image}
+                      alt=""
+                      width={56}
+                      height={56}
+                      className="h-14 w-14 object-contain drop-shadow-lg"
+                    />
+                  ) : (
+                    <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/15 text-primary">
+                      {LucideIcon && <LucideIcon className="h-5 w-5" />}
+                    </div>
+                  )}
+                </div>
+                <h3 className="text-base font-semibold">{f.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{f.description}</p>
+              </motion.div>
+            );
+          })}
         </div>
       </section>
 

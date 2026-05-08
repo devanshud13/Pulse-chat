@@ -1,32 +1,60 @@
 'use client';
 
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react';
+import dynamic from 'next/dynamic';
 import { Paperclip, SendHorizonal, Smile, X } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { messageService, uploadService } from '@/services/chat.service';
+import { keyService } from '@/services/key.service';
+import { encryptForRecipients } from '@/lib/crypto';
 import { getSocket } from '@/services/socket';
+import { useAuthStore } from '@/store/auth.store';
 import { useChatStore } from '@/store/chat.store';
+import type { Chat, Message } from '@/types';
 import { formatBytes } from '@/utils/format';
 
-const EMOJIS = ['😀', '😂', '😍', '🔥', '🚀', '👍', '🎉', '❤️', '😎', '🤔', '👀', '✨'];
+const EmojiPicker = dynamic(
+  () => import('./EmojiPicker').then((m) => m.EmojiPicker),
+  { ssr: false },
+);
 
 interface Props {
-  chatId: string;
+  chat: Chat;
 }
 
-export function MessageComposer({ chatId }: Props): JSX.Element {
+let tempCounter = 0;
+function newTempId(): string {
+  tempCounter += 1;
+  return `temp-${Date.now()}-${tempCounter}`;
+}
+
+export function MessageComposer({ chat }: Props): JSX.Element {
+  const chatId = chat._id;
   const [text, setText] = useState('');
   const [showEmoji, setShowEmoji] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const emojiBtnRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTyping = useRef(false);
+
+  const me = useAuthStore((s) => s.user);
   const appendMessage = useChatStore((s) => s.appendMessage);
+  const replaceMessage = useChatStore((s) => s.replaceMessage);
+  const updateMessage = useChatStore((s) => s.updateMessage);
+  const removeMessage = useChatStore((s) => s.removeMessage);
 
   useEffect(() => {
     return () => {
@@ -37,6 +65,18 @@ export function MessageComposer({ chatId }: Props): JSX.Element {
       }
     };
   }, [chatId]);
+
+  useEffect(() => {
+    if (!showEmoji) return;
+    const onClick = (e: MouseEvent): void => {
+      const t = e.target as Node;
+      if (popoverRef.current?.contains(t)) return;
+      if (emojiBtnRef.current?.contains(t)) return;
+      setShowEmoji(false);
+    };
+    window.addEventListener('mousedown', onClick);
+    return () => window.removeEventListener('mousedown', onClick);
+  }, [showEmoji]);
 
   const triggerTyping = (): void => {
     const socket = getSocket();
@@ -63,28 +103,94 @@ export function MessageComposer({ chatId }: Props): JSX.Element {
   };
 
   const send = async (): Promise<void> => {
-    if (sending) return;
-    if (!text.trim() && !pendingFile) return;
+    if (sending || !me) return;
+    const trimmed = text.trim();
+    if (!trimmed && !pendingFile) return;
+
     setSending(true);
+    const tempId = newTempId();
+    const now = new Date().toISOString();
+    const fileForOptimistic = pendingFile;
+    const optimisticType: 'text' | 'image' | 'file' = fileForOptimistic
+      ? fileForOptimistic.type.startsWith('image/')
+        ? 'image'
+        : 'file'
+      : 'text';
+
+    /* 1. Render optimistic message immediately. The clock icon kicks in via
+          `pending: true` until the server confirms with the real id. */
+    const optimistic: Message = {
+      _id: tempId,
+      chat: chatId,
+      sender: me,
+      type: optimisticType,
+      content: trimmed,
+      readBy: [me._id],
+      deliveredTo: [me._id],
+      edited: false,
+      deleted: false,
+      createdAt: now,
+      updatedAt: now,
+      pending: true,
+      plaintext: trimmed,
+      attachment: fileForOptimistic
+        ? {
+            url: URL.createObjectURL(fileForOptimistic),
+            name: fileForOptimistic.name,
+            size: fileForOptimistic.size,
+            mime: fileForOptimistic.type,
+          }
+        : undefined,
+    };
+    appendMessage(chatId, optimistic);
+    setText('');
+    setPendingFile(null);
+
     try {
       let attachment;
-      let type: 'text' | 'image' | 'file' = 'text';
-      if (pendingFile) {
+      if (fileForOptimistic) {
         setUploading(true);
-        const uploaded = await uploadService.upload(pendingFile);
+        const uploaded = await uploadService.upload(fileForOptimistic);
         setUploading(false);
         attachment = uploaded;
-        type = pendingFile.type.startsWith('image/') ? 'image' : 'file';
       }
-      const msg = await messageService.send({
+
+      /* 2. Try to encrypt the body with every member's RSA public key. If even
+            one is missing we fall back to plaintext so we don't break the chat
+            for users who haven't generated keys yet. */
+      let payloadContent = trimmed;
+      let encryption: {
+        enabled: boolean;
+        iv?: string;
+        keys: { user: string; key: string }[];
+      } = { enabled: false, keys: [] };
+
+      if (trimmed) {
+        const memberIds = chat.members.map((m) => m._id);
+        const keys = await keyService.getPublicKeys(memberIds);
+        const recipients = memberIds
+          .map((id) => ({ userId: id, publicKey: keys[id] }))
+          .filter((r): r is { userId: string; publicKey: string } => Boolean(r.publicKey));
+        if (recipients.length === memberIds.length && recipients.length > 0) {
+          const env = await encryptForRecipients(trimmed, recipients);
+          payloadContent = env.ciphertext;
+          encryption = { enabled: true, iv: env.iv, keys: env.keys };
+        }
+      }
+
+      const real = await messageService.send({
         chatId,
-        content: text.trim(),
-        type,
+        content: payloadContent,
+        type: optimisticType,
         attachment,
+        encryption: encryption.enabled ? encryption : undefined,
       });
-      appendMessage(chatId, msg);
-      setText('');
-      setPendingFile(null);
+
+      /* 3. Replace the optimistic shell with the canonical server copy.
+            Cache the plaintext we already have so we don't re-decrypt our own
+            outgoing message. */
+      replaceMessage(chatId, tempId, { ...real, plaintext: trimmed });
+
       if (isTyping.current) {
         getSocket().emit('typing:stop', chatId);
         isTyping.current = false;
@@ -94,6 +200,11 @@ export function MessageComposer({ chatId }: Props): JSX.Element {
         ? (err.response?.data as { message?: string } | undefined)?.message ?? 'Failed to send'
         : 'Failed to send';
       toast.error(msg);
+      updateMessage(chatId, tempId, { failed: true, pending: false });
+      /* Roll back blob URL to free memory if attachment was optimistic. */
+      if (fileForOptimistic) {
+        setTimeout(() => removeMessage(chatId, tempId), 5000);
+      }
     } finally {
       setSending(false);
       setUploading(false);
@@ -139,6 +250,7 @@ export function MessageComposer({ chatId }: Props): JSX.Element {
         </Button>
         <div className="relative">
           <Button
+            ref={emojiBtnRef}
             type="button"
             variant="ghost"
             size="icon"
@@ -148,20 +260,15 @@ export function MessageComposer({ chatId }: Props): JSX.Element {
             <Smile className="h-5 w-5" />
           </Button>
           {showEmoji && (
-            <div className="absolute bottom-12 left-0 z-10 grid w-56 grid-cols-6 gap-1 rounded-lg border bg-popover p-2 shadow-lg">
-              {EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  className="rounded p-1 text-xl hover:bg-accent"
-                  onClick={() => {
-                    setText((t) => t + e);
-                    setShowEmoji(false);
-                  }}
-                >
-                  {e}
-                </button>
-              ))}
+            <div
+              ref={popoverRef}
+              className="absolute bottom-12 left-0 z-50"
+            >
+              <EmojiPicker
+                onSelect={(emoji) => {
+                  setText((t) => t + emoji);
+                }}
+              />
             </div>
           )}
         </div>
